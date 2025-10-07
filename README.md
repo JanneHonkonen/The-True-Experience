@@ -207,7 +207,7 @@ python main.py input_video.mp4 --verbose
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+See project main branch
 
 ## Citation
 
