@@ -197,14 +197,6 @@ Enable verbose logging to see detailed processing information:
 python main.py input_video.mp4 --verbose
 ```
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
 ## License
 
 See project main branch
