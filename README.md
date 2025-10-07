@@ -49,13 +49,20 @@ This structured output acts as a bridge between cinematic expression and languag
 - Adaptive AI systems: Robots or agents that perceive audiovisual media with contextual depth.
 
 ## License
-License (Temporary / Placeholder)  
-This concept and documentation are released for reading and discussion only.  
-- No derivative works  
-- No commercial use  
-- No forks, redistribution, or modification  
 
-A formal license will be defined later. All rights reserved by the author.
+This project is released under a **Non-Commercial License** for research, personal, and educational use.  
+**Commercial use requires a separate commercial license** from the author.
+
+- Free use, modification, and redistribution are allowed for non-commercial purposes.  
+- Commercial use, including integration into paid products or services, is prohibited without explicit permission.  
+- This license text must be included with any derivative works based on the concept or codebase.  
+- Commercial users must obtain a license directly from the author.
+
+**Contact for commercial licensing:**  
+- X / Mastodon / Bluesky: [@JanneHonkonen](https://bsky.app/profile/jannehonkonen.com)  
+- LinkedIn or email: *first name* at owlkeep dot com
+
+© 2025 B.Eng. Janne Honkonen. All rights reserved.
 
 ## Author
 B.Eng. Janne Honkonen  
