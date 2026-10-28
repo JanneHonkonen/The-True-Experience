@@ -13,6 +13,20 @@ from pathlib import Path
 from .pipeline import analyze
 from .trailer_review import make_review
 from .context import build_context
+from .evaluation import validate_report
+
+def _cache_signature(video, options):
+    stat=video.resolve().stat()
+    return {"absolute_video_path":str(video.resolve()),
+            "video_bytes":stat.st_size,"modified_ns":stat.st_mtime_ns,
+            "options":options}
+
+def _write_json_atomic(target, data):
+    target.parent.mkdir(parents=True,exist_ok=True)
+    tmp=target.with_name(target.name+".tmp")
+    tmp.write_text(json.dumps(data,ensure_ascii=False,indent=2,allow_nan=False)+"\n",
+                   encoding="utf-8")
+    tmp.replace(target)
 
 
 def positive(value: str) -> float:
@@ -41,36 +55,75 @@ def main(argv=None) -> int:
                    help="Maximum real video frames seen by Ollama in each window (1..8)")
     p.add_argument("--context-timeout", type=positive, default=300.0,
                    help="Timeout per local Ollama model inference, in seconds")
+    p.add_argument("--analysis-cache",type=Path,
+                   default=Path("iron_man_analysis_private.json"),
+                   help="PRIVATE full ASR/BLIP cache used when context-model is enabled")
+    p.add_argument("--reuse-analysis",action="store_true",
+                   help="Reuse validated PRIVATE source analysis; skip Whisper and BLIP")
+    p.add_argument("--resume-context",action="store_true",
+                   help="Resume previously checkpointed context windows (requires cache reuse)")
     args = p.parse_args(argv)
     try:
         if not args.video.is_file():
             raise FileNotFoundError(f"Video file not found: {args.video}")
-        result = analyze(
-            args.video, interval=args.interval, transcribe=True,
-            whisper_model=args.whisper_model, language=args.language,
-            caption_frames=True, max_caption_frames=args.max_caption_frames,
-            caption_spacing=args.caption_spacing)
+        if args.reuse_analysis and not args.context_model:
+            raise ValueError("--reuse-analysis requires --context-model")
+        if args.resume_context and not args.reuse_analysis:
+            raise ValueError("--resume-context also requires --reuse-analysis")
+        destinations = [args.output.resolve()]
+        if args.context_model:
+            destinations.extend([args.context_output.resolve(),args.analysis_cache.resolve()])
+        if len(destinations)!=len(set(destinations)):
+            raise ValueError("Public, analysis cache and context output files must be different")
+        pipeline_options={"interval":args.interval, "whisper_model":args.whisper_model,
+                          "language":args.language,"caption_frame_cap":args.max_caption_frames,
+                          "caption_spacing":args.caption_spacing}
+        signature=_cache_signature(args.video,pipeline_options) if args.context_model else None
+        if args.reuse_analysis:
+            if not args.analysis_cache.is_file():
+                raise ValueError(f"No analysis cache at {args.analysis_cache}. Run once without --reuse-analysis")
+            cached=json.loads(args.analysis_cache.read_text(encoding="utf-8"))
+            if not isinstance(cached,dict) or cached.get("signature")!=signature:
+                raise ValueError("Analysis cache does not match current video or inference settings")
+            result=cached.get("report")
+            if not isinstance(result,dict):
+                raise ValueError("Analysis cache contains no valid report")
+            validation=validate_report(result)
+            if not validation["valid"]:
+                raise ValueError("Cached report failed structural validation")
+            print("Reused private analysis cache; skipped Whisper and BLIP.",file=sys.stderr)
+        else:
+            result = analyze(
+                args.video, interval=args.interval, transcribe=True,
+                whisper_model=args.whisper_model, language=args.language,
+                caption_frames=True, max_caption_frames=args.max_caption_frames,
+                caption_spacing=args.caption_spacing)
+            if args.context_model:
+                _write_json_atomic(args.analysis_cache,{
+                    "cache_version":1,"signature":signature,"report":result,
+                    "privacy":"PRIVATE: contains raw speech transcription; never publish"})
+                print(f"Private analysis cache saved at {args.analysis_cache}",file=sys.stderr)
         public_report = make_review(result, args.video_id)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
             json.dumps(public_report, ensure_ascii=False, indent=2, allow_nan=False)+"\n",
             encoding="utf-8")
         if args.context_model:
-            # Checkpoint after each window so an interrupted long model run does
-            # not discard earlier reasoning. This report may contain ASR paraphrases.
+            # Context can include ASR excerpts. Keep it separate from public output.
             def checkpoint(context):
-                target = args.context_output
-                target.parent.mkdir(parents=True, exist_ok=True)
-                tmp = target.with_name(target.name + ".tmp")
-                tmp.write_text(json.dumps(context, ensure_ascii=False, indent=2,
-                                          allow_nan=False)+"\n", encoding="utf-8")
-                tmp.replace(target)
+                _write_json_atomic(args.context_output,context)
+            resume=None
+            if args.resume_context:
+                if not args.context_output.is_file():
+                    raise ValueError(f"No existing context checkpoint at {args.context_output}")
+                resume=json.loads(args.context_output.read_text(encoding="utf-8"))
             context = build_context(
                 result, args.video, model=args.context_model,
                 window_seconds=args.context_window,
                 max_images=args.max_context_images,
                 timeout=args.context_timeout,
-                on_window=checkpoint)
+                on_window=checkpoint,
+                resume=resume)
             checkpoint(context)
             print(f"Saved {len(context['windows'])} rolling-context windows to "
                   f"{args.context_output} (PRIVATE model hypotheses)")
