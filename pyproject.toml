@@ -9,9 +9,9 @@ description = "Evidence-first audiovisual timeline extraction"
 requires-python = ">=3.10"
 
 [project.optional-dependencies]
-speech = ["faster-whisper>=1.1,<2"]
+speech = ["faster-whisper>=1.1,<2", "av>=11,<19"]
 vision = ["transformers>=4.45,<5", "torch>=2.2", "pillow>=10"]
-all = ["faster-whisper>=1.1,<2", "transformers>=4.45,<5", "torch>=2.2", "pillow>=10"]
+all = ["faster-whisper>=1.1,<2", "av>=11,<19", "transformers>=4.45,<5", "torch>=2.2", "pillow>=10"]
 
 [project.scripts]
 true-experience = "true_experience.__main__:main"

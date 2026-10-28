@@ -65,6 +65,18 @@ authorized to do so. The source link is an identification aid, not
 proof of the local file's provenance: users must verify that the
 video actually matches the specified YouTube source.
 
+### Troubleshooting Windows decoding
+
+If Whisper downloads its weights but fails with `open() got an unexpected keyword argument 'metadata_errors'`, reinstall dependencies **inside the activated venv**:
+
+```powershell
+git pull
+python -m pip install -r requirements.txt
+python -m pip show av faster-whisper
+```
+
+This project now pins PyAV below major version 19 because faster-whisper 1.2.1 calls a PyAV argument removed in version 19. If the current installation still contains PyAV 19, run `python -m pip install --force-reinstall "av>=11,<19"` and retry the local trailer command. The Hugging Face Xet package warning is unrelated and optional.
+
 ## Honest interpretation
 
 - A successful model run only proves that perception works end-to-end.

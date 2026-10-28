@@ -30,6 +30,24 @@ If your old command `python -m pip install -e '.[all]'` failed with *not a valid
 
 **Note:** installing PyTorch can take substantial disk space. On **CPU-only Linux**, you may first install the CPU build of PyTorch with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu`, then run `python -m pip install -r requirements.txt` to install the remaining dependencies. First model inference also downloads model weights. The video is processed locally; no API key is required.
 
+### Fix for Windows: `metadata_errors` when decoding video
+
+If transcription fails with `open() got an unexpected keyword argument 'metadata_errors'`, an incompatible PyAV 19.x version was installed alongside faster-whisper 1.2.1. The new requirements file explicitly pins `av>=11,<19`. In your **activated venv**, run from the repository root:
+
+```powershell
+git pull
+python -m pip install -r requirements.txt
+python -m pip show av faster-whisper
+```
+
+If pip still reports PyAV 19, explicitly reinstall a compatible version:
+
+```powershell
+python -m pip install --force-reinstall "av>=11,<19"
+```
+
+The earlier message about Hugging Face Xet Storage simply indicates a slower download path; it is unrelated to the decoding error. Your downloaded model weights should remain cached. This workaround can be removed when a faster-whisper release supporting PyAV 19 becomes available.
+
 ## Video processing without AI models
 
 You can skip Python dependency installation entirely for basic FFmpeg-only analysis:

@@ -9,7 +9,10 @@
 # CPU-only Linux users may install the CPU PyTorch wheel first:
 #     python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 #
+# faster-whisper 1.2.1 passes av.open(metadata_errors="ignore"), removed in PyAV 19.
+# Keep this constraint until a compatible faster-whisper release is available.
 faster-whisper>=1.1,<2
+av>=11,<19
 transformers>=4.45,<5
 torch>=2.2
 pillow>=10
