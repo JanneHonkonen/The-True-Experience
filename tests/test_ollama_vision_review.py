@@ -91,7 +91,7 @@ class LocalBackendTests(unittest.TestCase):
             request_payload([{"shot_id":1,"frame_time_seconds":.5}],[b"not-image"],"qwen3-vl:8b")
         with self.assertRaisesRegex(ValueError,"parseable"):
             extract_response({"message":{"content":"not json"}})
-        with self.assertRaises(ValueError):
+        with self.assertRaises(FileNotFoundError):
             review_archive(Path("no_file.zip"),Path("x.json"),dry_run=True)
 
 
