@@ -113,6 +113,33 @@ The existing venv requirements remain sufficient; Ollama is a separate app.
 See [context documentation](docs/CONTEXT_REASONING.md) for model constraints,
 limitations, and how to evaluate unsupported character/causal links.
 
+## Shot-by-shot visual archive for evaluating claims
+
+When running interactively, the trailer script will ask:
+
+> Create shot/evidence thumbnail ZIP at iron_man_review_shots.zip? [y/N]:
+
+Answer y/yes to save one JPEG from the midpoint of **every detected shot**
+and a separate exact-time image for every visual evidence ID, e.g. v0001.
+The filename has the shot ID and the original timestamps, rendered with
+hyphens instead of colons for Windows. manifest.json links these images
+to their shot IDs, exact JSON times and context-window references.
+
+For unattended operation use --thumbnails or --no-thumbnails. For a
+custom path use --thumbnails-output iron_man_shots.zip.
+
+You can create a ZIP NOW, using your existing private analysis files and
+**without rerunning any AI inference**:
+
+~~~powershell
+python -m true_experience.shot_archive "C:\winstuff\ai\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
+~~~
+
+The archive contains JPEG frames from your source video. It does not
+contain audio or raw transcripts and is never automatically uploaded.
+Check sharing rights before sending it. Details:
+[shot and evidence archive guide](docs/SHOT_THUMBNAILS.md).
+
 ## Output fields and limitations
 
 - `shots`: FFmpeg shot-cut candidates, **not** semantic scenes.
