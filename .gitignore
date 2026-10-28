@@ -13,3 +13,7 @@ analysis_output.json
 
 # Local evaluation artifact (can contain model-generated descriptions)
 iron_man_review.json
+
+# Unverified contextual film summaries may paraphrase transcript or other material
+iron_man_context_private.json
+*_context_private.json

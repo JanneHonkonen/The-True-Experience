@@ -30,6 +30,22 @@ python -m true_experience.local_trailer "C:\Videos\iron-man-trailer.mp4" -o iron
 
 If the trailer command fails with `open() got an unexpected keyword argument 'metadata_errors'`, run `python -m pip install -r requirements.txt` again. This project now constrains PyAV below 19 for faster-whisper compatibility. Check with `python -m pip show av` (expected PyAV 18.x or earlier).
 
+### Experimental: time-linked understanding with local visual reasoning
+
+For **multiple actual frames per time window, short-term memory, cited
+visual/audio evidence and tentative continuity**, install [Ollama](https://ollama.com/download),
+pull a vision-capable model such as `ollama pull gemma3:4b`, then run:
+
+```powershell
+python -m true_experience.local_trailer "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 -o iron_man_review.json --context-output iron_man_context_private.json
+```
+
+The model reads sampled frame images and fallible ASR, but its narrative output
+remains **unverified hypotheses**, not proven character identity or causality.
+The private context file is **excluded from Git** and may paraphrase dialogue.
+It is never included in the sanitized public report. See
+[rolling context documentation](docs/CONTEXT_REASONING.md).
+
 The first model run downloads Whisper and BLIP weights; allow sufficient disk space and network access. To see available options, run `python -m true_experience.local_trailer --help`. The video remains local. Use only media you're authorized to process; the report contains no source video or full transcript. To exit the environment, use `deactivate`.
 
 If you see **`'.[all]' is not a valid editable requirement`**, use `python -m pip install -r requirements.txt` instead. `'.[all]'` is a *package extras selector*, not a filename; editable installation depends on being in the correct project directory and on a working build setup. The requirements-file command installs dependencies directly.
