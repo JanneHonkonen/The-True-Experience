@@ -82,7 +82,8 @@ class WindowTests(unittest.TestCase):
                          "Unverified context hypothesis")
         self.assertTrue(all(x["human_groundedness_review"]=="not_reviewed"
                             for window in result["windows"] for x in window["events"]))
-        self.assertNotIn("We need to move",json.dumps(result))
+        self.assertIn("We need to move.",result["evidence_index"]["a0001"]["asr_excerpt"])
+        self.assertEqual(result["evidence_index"]["v0001"]["time_seconds"],3.0)
         self.assertEqual(result["windows"][0]["validation"],"schema_and_citations_only")
 
     def test_spoken_words_are_not_promoted_to_fact(self):

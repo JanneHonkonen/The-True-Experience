@@ -23,7 +23,9 @@ motivate the next stage; they **do not** tell us what happens in unseen shots.
 6. Keep results separate from public summary:
    - iron_man_review.json: existing sanitized counts, captions and links
    - iron_man_context_private.json: sequential model hypotheses, citations,
-     continuity suggestions, unanswered questions and explicit uncertainty
+     continuity suggestions, unanswered questions and explicit uncertainty,
+     **plus a local evidence_index with timestamped ASR excerpts for auditing**
+     (not included in the public report)
 7. Checkpoint after each completed model window. An interrupted long run
    retains its processed private windows for inspection.
 
@@ -85,7 +87,8 @@ causality, and unknown or missing events. Do not score solely on fluent text.
 
 The local tool sends sampled frame pixels and ASR snippets to Ollama
 at **127.0.0.1:11434 only**. It never uploads the video to GitHub.
-The context output is saved to disk locally and excluded from Git by
-.gitignore, but that does **not** encrypt it or protect it if you share it.
+The context output (including ASR text excerpts) is saved to disk locally
+and excluded from Git by .gitignore, but that does **not** encrypt it or
+protect it if you share it.
 Keep Ollama bound to localhost and treat your transcript data as private.
 No remote endpoint can be selected using the CLI.
