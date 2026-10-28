@@ -28,6 +28,8 @@ python -m pip install -r requirements.txt
 python -m true_experience.local_trailer "C:\Videos\iron-man-trailer.mp4" -o iron_man_review.json
 ```
 
+If the trailer command fails with `open() got an unexpected keyword argument 'metadata_errors'`, run `python -m pip install -r requirements.txt` again. This project now constrains PyAV below 19 for faster-whisper compatibility. Check with `python -m pip show av` (expected PyAV 18.x or earlier).
+
 The first model run downloads Whisper and BLIP weights; allow sufficient disk space and network access. To see available options, run `python -m true_experience.local_trailer --help`. The video remains local. Use only media you're authorized to process; the report contains no source video or full transcript. To exit the environment, use `deactivate`.
 
 If you see **`'.[all]' is not a valid editable requirement`**, use `python -m pip install -r requirements.txt` instead. `'.[all]'` is a *package extras selector*, not a filename; editable installation depends on being in the correct project directory and on a working build setup. The requirements-file command installs dependencies directly.
