@@ -208,10 +208,33 @@ def build_context(report,video,*,model="gemma3:4b",window_seconds=12.,
         message={"role":"user","content":json.dumps(user_message,ensure_ascii=False)}
         if selected:
             message["images"]=[_jpeg_frame(video,x["time_seconds"],frame_loader) for x in selected]
-        output=backend([{"role":"system","content":SYSTEM_PROMPT},message],model,timeout)
-        if not isinstance(output,dict):
-            raise RuntimeError("Context backend must return a JSON object")
-        validated=validate_hypothesis(output,current_ids,{x["window_id"] for x in prior})
+        if not current_ids:
+            # There is nothing to observe. Never ask a model to fill empty time.
+            validated=validate_hypothesis({
+                "summary":"No sampled visual or transcribed speech evidence in this interval.",
+                "events":[],"continuity":"unknown",
+                "links_previous_windows":[],"open_questions":["What occurs in this unsampled interval?"]
+            },current_ids,set())
+        else:
+            messages=[{"role":"system","content":SYSTEM_PROMPT},message]
+            for attempt in range(2):
+                output=backend(messages,model,timeout)
+                if not isinstance(output,dict):
+                    raise RuntimeError("Context backend must return a JSON object")
+                try:
+                    validated=validate_hypothesis(output,current_ids,
+                                                 {x["window_id"] for x in prior})
+                    break
+                except ValueError as exc:
+                    if attempt:
+                        raise ValueError(f"Context model returned invalid evidence-backed "
+                                         f"JSON after retry for {window['window_id']}: {exc}") from exc
+                    messages.extend([
+                        {"role":"assistant","content":json.dumps(output,ensure_ascii=False)},
+                        {"role":"user","content":"Your JSON did not match the required schema: "
+                         +str(exc)+". Return corrected JSON only, using ONLY the given "
+                         "evidence IDs and previous window IDs."}
+                    ])
         item={"window_id":window["window_id"],
               "start_seconds":window["start_seconds"],"end_seconds":window["end_seconds"],
               "evidence_ids":sorted(current_ids),
