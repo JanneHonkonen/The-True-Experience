@@ -162,3 +162,35 @@ CI tests pipeline components and mocks inference backends; actual pretrained-mod
 ## License
 
 See the author's non-commercial terms in README. Review model and dataset licenses before redistributing the combined system.
+
+## Alternative visual reviewers: OpenAI API or Codex
+
+A new model-neutral review interface uses the already-created
+iron_man_shots.zip. **FFmpeg still detects cuts.** These modes only
+review images from the detected shots.
+
+Create the offline Codex/manual folder (NO API cost):
+
+~~~powershell
+python -m true_experience.vision_handoff iron_man_shots.zip -o iron_man_codex_handoff
+~~~
+
+It includes all source frame JPEGs, timestamps, TASK.md/AGENTS.md,
+an output JSON schema and an empty result template.
+
+Preview a paid OpenAI API pilot **without sending data**:
+
+~~~powershell
+python -m true_experience.openai_vision_review iron_man_shots.zip --max-shots 12 --dry-run
+~~~
+
+After setting OPENAI_API_KEY securely, choose to upload/bill for
+12 frames explicitly:
+
+~~~powershell
+python -m true_experience.openai_vision_review iron_man_shots.zip --max-shots 12 --model gpt-5.4-mini --confirm-upload -o openai_shot_review.json
+~~~
+
+Do not run all 119 shots until the pilot quality/cost is acceptable.
+API calls are charged separately from ChatGPT/Codex access. Consult
+[Vision review backends](docs/VISION_REVIEW_BACKENDS.md).

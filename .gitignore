@@ -25,3 +25,11 @@ iron_man_analysis_private.json
 # Extracted source-video frames may be copyrighted
 *_shots.zip
 *_thumbnails.zip
+
+# Output from model review / API and source-frame handoff folders
+shot_review_handoff/
+iron_man_codex_handoff/
+iron_man_codex_pilot/
+shot_review.json
+openai_shot_review.json
+*_shot_review.json
