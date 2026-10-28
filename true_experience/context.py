@@ -175,11 +175,28 @@ def build_context(report,video,*,model="gemma3:4b",window_seconds=12.,
     choose_frames([],max_images)  # validate cap even when video is empty
     backend=backend or local_ollama
     frame_loader=frame_loader or _extract_image
+    # Local-only audit map: trace event IDs to timestamps and original ASR
+    # excerpts. Do NOT add this to the sanitized public trailer report.
+    evidence_index={}
+    for window in windows:
+        for frame in window["frames"]:
+            evidence_index[frame["id"]]={
+                "source":"sampled_video_frame",
+                "time_seconds":frame["time_seconds"],
+                "shot_id":frame["shot_id"],
+                "caption_hypothesis":frame["caption_hypothesis"]}
+        for segment in window["speech"]:
+            evidence_index[segment["id"]]={
+                "source":"unverified_asr",
+                "start_seconds":segment["start_seconds"],
+                "end_seconds":segment["end_seconds"],
+                "asr_excerpt":segment["text"][:400]}
     result={"schema_version":"0.1.0","context_model":model,
             "source_duration_seconds":report["metadata"]["duration_seconds"],
             "window_duration_seconds":window_seconds,
             "mode":"local_multimodal_hypotheses",
-            "privacy":"Contains model summaries influenced by ASR; review before sharing",
+            "privacy":"PRIVATE: contains excerpts of ASR dialogue and model-generated hypotheses; never upload publicly",
+            "evidence_index":evidence_index,
             "verified_accuracy":None,
             "warnings":["Frames are sparse samples; events between frames are unknown.",
                         "Input ASR and BLIP captions are fallible.",
