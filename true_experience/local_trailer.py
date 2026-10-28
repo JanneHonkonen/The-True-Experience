@@ -14,6 +14,7 @@ from .pipeline import analyze
 from .trailer_review import make_review
 from .context import build_context
 from .evaluation import validate_report
+from .shot_archive import create_archive
 
 def _cache_signature(video, options):
     stat=video.resolve().stat()
@@ -62,6 +63,13 @@ def main(argv=None) -> int:
                    help="Reuse validated PRIVATE source analysis; skip Whisper and BLIP")
     p.add_argument("--resume-context",action="store_true",
                    help="Resume previously checkpointed context windows (requires cache reuse)")
+    thumbs = p.add_mutually_exclusive_group()
+    thumbs.add_argument("--thumbnails",action="store_true",default=None,
+                        help="Create local ZIP of shot thumbnails + exact model evidence frames")
+    thumbs.add_argument("--no-thumbnails",action="store_false",dest="thumbnails",
+                        help="Never prompt or create thumbnail ZIP")
+    p.add_argument("--thumbnails-output",type=Path,
+                   help="ZIP destination; defaults to <public_report_stem>_shots.zip")
     args = p.parse_args(argv)
     try:
         if not args.video.is_file():
@@ -73,6 +81,10 @@ def main(argv=None) -> int:
         destinations = [args.output.resolve()]
         if args.context_model:
             destinations.extend([args.context_output.resolve(),args.analysis_cache.resolve()])
+        thumbnail_target = (args.thumbnails_output if args.thumbnails_output
+                            else args.output.with_name(args.output.stem+"_shots.zip"))
+        if thumbnail_target.resolve() in destinations or thumbnail_target.resolve()==args.video.resolve():
+            raise ValueError("Thumbnail ZIP must be distinct from all source and JSON files")
         if len(destinations)!=len(set(destinations)):
             raise ValueError("Public, analysis cache and context output files must be different")
         pipeline_options={"interval":args.interval, "whisper_model":args.whisper_model,
@@ -108,6 +120,31 @@ def main(argv=None) -> int:
         args.output.write_text(
             json.dumps(public_report, ensure_ascii=False, indent=2, allow_nan=False)+"\n",
             encoding="utf-8")
+        # Ask ONLY in an interactive terminal, and default to no in CI.
+        # Archive runs after analysis but before any expensive context LLM calls.
+        do_thumbnails = args.thumbnails
+        if do_thumbnails is None:
+            if sys.stdin.isatty():
+                try:
+                    answer=input(f"Create shot/evidence thumbnail ZIP at {thumbnail_target}? [y/N]: ")
+                except EOFError:
+                    answer=""
+                do_thumbnails=answer.strip().casefold() in ("y","yes")
+            else:
+                do_thumbnails=False
+        archive_error=False
+        if do_thumbnails:
+            try:
+                plan=((args.context_window,args.max_context_images)
+                      if args.context_model else None)
+                manifest=create_archive(args.video,result,thumbnail_target,context_plan=plan)
+                print(f"Saved {manifest['shot_count']} shot images and "
+                      f"{manifest['visual_sample_count']} exact visual evidence images "
+                      f"to {thumbnail_target} (LOCAL; not uploaded)")
+            except (OSError,RuntimeError,ValueError) as exc:
+                archive_error=True
+                print(f"Thumbnail archive failed; continuing context analysis: {exc}",
+                      file=sys.stderr)
         if args.context_model:
             # Context can include ASR excerpts. Keep it separate from public output.
             def checkpoint(context):
@@ -130,7 +167,7 @@ def main(argv=None) -> int:
         print(f"Saved {public_report['visual']['total_captions']} timestamped frame captions "
               f"and {public_report['speech']['segment_count']} ASR segment counts to {args.output}")
         print("Caption accuracy and transcription WER remain unmeasured.")
-        return 0
+        return 1 if archive_error else 0
     except (OSError, RuntimeError, ValueError, TypeError, KeyError) as exc:
         print(f"Evaluation failed: {exc}", file=sys.stderr)
         return 1
