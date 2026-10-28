@@ -29,6 +29,10 @@ For every shot, write an independent, evidence-grounded assessment:
 - visible_action: only clearly visually supported, otherwise 'unknown'.
 - uncertainties: what cannot be established from the still.
 
+If evidence/ images are present, they show extra precise sampled frames
+with IDs such as v0001, linked through manifest.json. Use them only to
+check what is actually visible, not to invent motion between frames.
+
 Do not trust earlier model captions. Do not infer movie title, actor or
 character names. Note ambiguity rather than guessing.
 
@@ -70,6 +74,12 @@ def create_handoff(archive,output,*,max_shots=0,overwrite=False):
             raise ValueError("Only an empty existing folder can be reused")
     output.mkdir(parents=True,exist_ok=True)
     (output/"shots").mkdir(exist_ok=True)
+    (output/"evidence").mkdir(exist_ok=True)
+    chosen_ids={s["shot_id"] for s in shots}
+    visual_evidence=[{"evidence_id":v["evidence_id"],"shot_id":v["shot_id"],
+                      "frame_time_seconds":v["frame_time_seconds"],"image":v["image"]}
+                     for v in manifest.get("visual_evidence",[])
+                     if v["shot_id"] in chosen_ids]
     subset={
         "schema_version":"1.0",
         "source_video_name":manifest.get("source_video_name"),
@@ -80,12 +90,21 @@ def create_handoff(archive,output,*,max_shots=0,overwrite=False):
         "shots":[{"shot_id":s["shot_id"],"image":s["image"],
                   "start_seconds":s["start_seconds"],
                   "end_seconds":s["end_seconds"],
-                  "frame_time_seconds":s["frame_time_seconds"]} for s in shots]
+                  "frame_time_seconds":s["frame_time_seconds"],
+                  "visual_evidence_ids":s.get("visual_evidence_ids",[])} for s in shots],
+        "visual_evidence":visual_evidence
     }
     try:
         with zipfile.ZipFile(archive) as z:
             for s in shots:
                 name=s["image"]
+                with z.open(name) as src, (output/name).open("wb") as dst:
+                    shutil.copyfileobj(src,dst,64*1024)
+        with zipfile.ZipFile(archive) as z:
+            for v in visual_evidence:
+                name=v["image"]
+                if not isinstance(name,str) or not name.startswith("evidence/") or                    ".." in Path(name).parts or name not in z.namelist() or                    z.getinfo(name).file_size>10_000_000:
+                    raise ValueError("Invalid evidence frame path")
                 with z.open(name) as src, (output/name).open("wb") as dst:
                     shutil.copyfileobj(src,dst,64*1024)
         for filename, data in (
