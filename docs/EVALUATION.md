@@ -13,7 +13,7 @@ This checks video duration, complete shot/timeline coverage, segment ordering, t
 
 ## Step 2 — Real pretrained model smoke test
 
-In GitHub, open **Actions → Real model smoke (manual) → Run workflow** on `main` after this PR is merged. This opt-in action downloads open model weights and creates a synthetic, espeak-voiced 30-second video with three visual sections. It runs local faster-whisper tiny + BLIP base, then uploads JSON results. It uses CPU, consumes runner time and needs network access to Hugging Face. It deliberately does not run on every push or PR.
+In GitHub, open **Actions → Real model smoke (manual) → Run workflow** on `main` after this PR is merged. This opt-in action downloads open model weights and creates a synthetic, espeak-voiced 30-second video with three visual sections. It runs local faster-whisper tiny + BLIP base, then uploads JSON results. The workflow includes the *known fixture sentence* as a separate SRT reference, calculates a clip-level word error rate, and writes a `fixture_quality.json` assessing expected solid-color words and unsupported “border” claims. The new metrics are descriptive, **not pass thresholds**; a future model update can change them without breaking the workflow. It uses CPU, consumes runner time and needs network access to Hugging Face. It deliberately does not run on every push or PR.
 
 **Passing the smoke test means only that the pretrained models execute and produce structurally valid output.** A synthetic colored clip cannot establish understanding of a real movie.
 

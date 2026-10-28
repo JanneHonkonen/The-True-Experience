@@ -39,7 +39,21 @@ jobs:
           python -m true_experience fixture.mp4 --scene-threshold 0.01 --interval 5 \
             --transcribe --whisper-model tiny --language en \
             --caption-frames --max-caption-frames 3 -o analysis.json
-          python -m true_experience.evaluate analysis.json -o evaluation.json
+          cat > fixture-reference.srt <<'EOF'
+          1
+          00:00:03,000 --> 00:00:06,000
+          The blue door opens and a person enters the room.
+          EOF
+          python -m true_experience.evaluate analysis.json --reference-srt fixture-reference.srt -o evaluation.json
+          python -m true_experience.fixture_benchmark analysis.json -o fixture_quality.json
+          python - <<'PY'
+          import json
+          quality=json.load(open("fixture_quality.json",encoding="utf-8"))
+          score=json.load(open("evaluation.json",encoding="utf-8"))["asr_word_error_rate"]
+          print("Synthetic-fixture WER:",score["wer"],"edits:",score["edit_distance"])
+          print("Synthetic-fixture color matches:",quality["correct_color_count"],"/",quality["expected_sample_count"])
+          print("Unsupported border claims:",quality["unsupported_border_claim_count"])
+          PY
           python - <<'PY'
           import json
           report = json.load(open("analysis.json", encoding="utf-8"))
@@ -55,4 +69,5 @@ jobs:
           path: |
             analysis.json
             evaluation.json
+            fixture_quality.json
           if-no-files-found: ignore
