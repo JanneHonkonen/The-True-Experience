@@ -1,0 +1,15 @@
+# AI inference dependencies for The True Experience (Python 3.11 recommended).
+# Install from the repository root in an activated venv:
+#     python -m pip install -r requirements.txt
+#
+# No '-e' / extras expression is needed. The stdlib + FFmpeg-only pipeline
+# works without installing any of these packages.
+# A first model run will download Whisper and BLIP weights.
+#
+# CPU-only Linux users may install the CPU PyTorch wheel first:
+#     python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+#
+faster-whisper>=1.1,<2
+transformers>=4.45,<5
+torch>=2.2
+pillow>=10

@@ -1,4 +1,37 @@
 # The True Experience  
+
+## Quick start — virtual environment (recommended)
+
+From the repository root, use **Python 3.11** and an isolated environment. FFmpeg and FFprobe must also be installed and available on your system PATH. The project has a plain `requirements.txt`; **no editable installation (`-e`) is needed** when running via `python -m`.
+
+**Linux / macOS:**
+
+```bash
+git clone https://github.com/JanneHonkonen/The-True-Experience.git
+cd The-True-Experience
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m true_experience.local_trailer "/path/to/iron-man-trailer.mp4" -o iron_man_review.json
+```
+
+**Windows PowerShell:**
+
+```powershell
+git clone https://github.com/JanneHonkonen/The-True-Experience.git
+cd The-True-Experience
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m true_experience.local_trailer "C:\Videos\iron-man-trailer.mp4" -o iron_man_review.json
+```
+
+The first model run downloads Whisper and BLIP weights; allow sufficient disk space and network access. To see available options, run `python -m true_experience.local_trailer --help`. The video remains local. Use only media you're authorized to process; the report contains no source video or full transcript. To exit the environment, use `deactivate`.
+
+If you see **`'.[all]' is not a valid editable requirement`**, use `python -m pip install -r requirements.txt` instead. `'.[all]'` is a *package extras selector*, not a filename; editable installation depends on being in the correct project directory and on a working build setup. The requirements-file command installs dependencies directly.
+
 ### Concept Framework for AI to Watch and Understand Film Like a Human
 
 ## Introduction
