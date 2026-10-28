@@ -15,6 +15,7 @@ class SetupDocsTests(unittest.TestCase):
                     if line.strip() and not line.lstrip().startswith("#")]
         self.assertEqual(packages, [
             "faster-whisper>=1.1,<2",
+            "av>=11,<19",
             "transformers>=4.45,<5",
             "torch>=2.2",
             "pillow>=10",
