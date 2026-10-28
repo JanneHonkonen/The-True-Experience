@@ -77,6 +77,15 @@ python -m pip show av faster-whisper
 
 This project now pins PyAV below major version 19 because faster-whisper 1.2.1 calls a PyAV argument removed in version 19. If the current installation still contains PyAV 19, run `python -m pip install --force-reinstall "av>=11,<19"` and retry the local trailer command. The Hugging Face Xet package warning is unrelated and optional.
 
+## Chaining audiovisual evidence across time
+
+For a second pass that uses images **and** dialogue together, see
+[the optional rolling-context guide](CONTEXT_REASONING.md). This uses
+a locally installed Ollama vision model with previous-window memory.
+It creates a separate private `iron_man_context_private.json` and does
+not change the sanitized `iron_man_review.json`. Never confuse
+model-proposed continuity with verified scene or character identity.
+
 ## Honest interpretation
 
 - A successful model run only proves that perception works end-to-end.

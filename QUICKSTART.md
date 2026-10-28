@@ -75,6 +75,33 @@ python -m true_experience.local_trailer "/path/to/iron-man-trailer.mp4" -o iron_
 
 Upload the generated `iron_man_review.json` for discussion, not the source movie. See [Iron Man trailer evaluation](docs/IRON_MAN_TRAILER_EVALUATION.md).
 
+## Experimental rolling audiovisual context
+
+The baseline report only describes individual frames. For optional local
+reasoning across time windows, install [Ollama](https://ollama.com/download),
+start its local server, and pull the vision model:
+
+```powershell
+ollama pull gemma3:4b
+```
+
+Then in your activated venv run from the repository root:
+
+```powershell
+python -m true_experience.local_trailer "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 --max-context-images 3 -o iron_man_review.json --context-output iron_man_context_private.json
+```
+
+This adds **model-generated interpretations** grounded to named visual/audio
+inputs, plus tentative links to two previous time windows. The context file
+is private and can include paraphrases of speech, so inspect it before sharing.
+The ordinary `iron_man_review.json` remains sanitized and does not include
+the context text. The feature is not a film-understanding accuracy benchmark.
+
+The local model may take substantial RAM and compute time, especially on CPU.
+The existing venv requirements remain sufficient; Ollama is a separate app.
+See [context documentation](docs/CONTEXT_REASONING.md) for model constraints,
+limitations, and how to evaluate unsupported character/causal links.
+
 ## Output fields and limitations
 
 - `shots`: FFmpeg shot-cut candidates, **not** semantic scenes.
