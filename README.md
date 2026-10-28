@@ -142,19 +142,35 @@ B.Eng. Janne Honkonen
 AI should not just parse cinema. It should feel it, follow it, and understand it. This concept outlines a path toward that ability - moving from data processing toward genuine emotional and narrative comprehension.
 
 
-## Alternate visual analysis backends
+## Automated visual review: two modes
 
-For an independent per-shot evaluation, you can generate a **Codex/manual
-handoff folder** from the shot ZIP, or optionally use OpenAI's billed
-Responses API with explicit --confirm-upload. Both use the same shot IDs
-and JSON response schema; neither replaces FFmpeg cut detection.
+Shot detection stays with FFmpeg. The first pass still uses Whisper/BLIP;
+for **more detailed, independent shot-image descriptions**, use the saved
+timestamped ZIP with a stronger vision model. No Codex folder is needed.
+
+**Recommended local test (no API key, runs through Ollama):**
 
 ~~~powershell
-python -m true_experience.vision_handoff iron_man_shots.zip -o iron_man_codex_handoff
-python -m true_experience.openai_vision_review iron_man_shots.zip --dry-run --max-shots 12
+ollama pull qwen3-vl:8b
+python -m true_experience.vision_review iron_man_shots.zip --max-shots 12 -o qwen_shot_review.json
 ~~~
 
-For API requests, set OPENAI_API_KEY securely and add --confirm-upload.
-The default API pilot sends at most 12 shot JPEGs; usage is billed
-separately from ChatGPT. The Codex folder is created entirely offline.
-See [vision reviewer instructions](docs/VISION_REVIEW_BACKENDS.md).
+Try --model qwen3-vl:4b on lower-RAM machines, or --model gemma3:12b
+for another comparison. To process all shots use --max-shots 0; use
+--resume to continue interrupted output. Ollama must support Qwen3-VL
+(version 0.12.7+). This model may be slow on CPU.
+
+**Optional OpenAI API** (paid, internet, explicit approval needed):
+
+~~~powershell
+python -m true_experience.vision_review iron_man_shots.zip --backend openai --dry-run
+python -m true_experience.vision_review iron_man_shots.zip --backend openai --max-shots 12 --confirm-upload -o openai_shot_review.json
+~~~
+
+You must set OPENAI_API_KEY securely before a paid run. The ordinary
+local Ollama mode does not upload frames. Both backends produce the
+same structured fields, preserving shot IDs and source timestamps.
+The output is still an *unverified* hypothesis from a still, not
+proof of character identity or narrative continuity. Compare it with
+the previous 12-shot visual review or the actual JPEGs. See
+[vision review options](docs/VISION_REVIEW_BACKENDS.md).

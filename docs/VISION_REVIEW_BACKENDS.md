@@ -1,125 +1,108 @@
-# Visual review backends: local, OpenAI API, and Codex/manual
+# Simple visual recognition: local Ollama or optional OpenAI API
 
-## Purpose and limitations
+## Purpose
 
-Do **not** replace FFmpeg cut detection with a general vision-language
-model. FFmpeg detects frame changes; a vision model describes *one selected
-still image*. Still frames cannot establish motion, which person is who
-between cuts, dialogue source, causality, or the true narrative.
+Our first BLIP results on the 151-second Iron Man trailer described many
+frames incorrectly or labeled them with unrelated movie titles. The
+12-shot manual review has much more concrete visual detail, but it is
+**not validated ground truth**, and its model field is unspecified.
 
-Your shot ZIP contains one midpoint thumbnail for **each detected shot**
-and separate actual sample frames under evidence/. Both are useful, but
-this visual-review experiment compares provider descriptions for the
-**same midpoint images** so shot IDs and timestamps cannot drift.
+FFmpeg still detects cuts. The independent vision reviewer reads the
+timestamped shot JPEGs from the existing iron_man_shots.zip and saves
+structured per-shot hypotheses using the SAME IDs and output schema.
+One still cannot establish actual motion, cause, speaker identity or
+narrative continuity.
 
-The model output is a hypothesis, not validated truth. Keep BLIP, Ollama,
-OpenAI API and Codex/manual reviews separate so disagreements can be
-audited against the actual image.
+No Codex environment, folder preparation or API key is needed for the
+default local mode.
 
-## A. Existing local Ollama mode
+## Local Ollama: recommended
 
-Continue using the existing local_trailer command with --context-model
-gemma3:4b. It sees multiple sampled frames and ASR, but the current
-context reasoning still has known hallucination/continuity weaknesses.
-It writes separate PRIVATE context output.
+1. Install or update Ollama from https://ollama.com/download.
+   Qwen3-VL requires Ollama **0.12.7 or newer**.
+2. Pull a model once:
 
-## B. Paid OpenAI API shot visual review
+       ollama pull qwen3-vl:8b
 
-This mode reads the already-generated shots ZIP. It sends **only shot JPEGs
-and shot IDs/timestamps** to the OpenAI Responses API and stores reviewed
-per-shot JSON. It does not upload the full video, audio or private ASR.
-It uses Structured Outputs and strict ID checking. It does not run
-unless you explicitly allow the upload using --confirm-upload.
+   It is roughly a 6.2GB download. If RAM is limited, use
+   qwen3-vl:4b (around 3.3GB); another option is gemma3:12b
+   (around 8.2GB). Larger models might help precision but also increase
+   memory and inference time. Actual film accuracy has NOT been measured.
+3. In your activated Python venv from the repository directory:
 
-Requirements: Python 3.11; internet; an API account with separate billing;
-OPENAI_API_KEY set securely in your environment. Do not paste API keys into
-GitHub, JSON files or conversations. The Python standard library suffices,
-so no additional pip install is required for this specific command.
+       python -m true_experience.vision_review iron_man_shots.zip --max-shots 12 -o qwen_shot_review.json
 
-Start by inspecting the plan (no network request, no key or charge):
+   Default backend is local Ollama and model qwen3-vl:8b. No API key
+   or OpenAI endpoint is used. Each still is processed in a separate
+   model request to prevent accidentally assigning a caption to another
+   shot. Output is checkpointed after each image.
 
-~~~powershell
-python -m true_experience.openai_vision_review iron_man_shots.zip --dry-run --max-shots 12
-~~~
+   Alternatives:
+       --model qwen3-vl:4b
+       --model gemma3:12b
+       --max-shots 0            (all shots)
+       --resume                 (continue saved partial JSON)
+       --dry-run                (no model calls)
 
-When you have chosen to transmit those 12 frames to OpenAI:
+The output has visible_description, visible_objects, visible_action and
+uncertainties for every reviewed shot. The model is asked to describe
+only what is visible, NOT to guess motion or character names.
 
-~~~powershell
-python -m true_experience.openai_vision_review iron_man_shots.zip --model gpt-5.4-mini --max-shots 12 --batch-size 4 --confirm-upload -o openai_shot_review.json
-~~~
+### Existing audiovisual context mode
 
-For a potentially stronger but more expensive vision model, replace
---model gpt-5.4-mini with --model gpt-5.4. The full 119-shot run requires
---max-shots 0. DO NOT run the full set until you are comfortable with the
-quality and token charges of a 12-shot pilot. A run checkpoints after each
-completed batch; repeat with --resume to avoid paying for completed batches.
+The local_trailer tool is a separate experimental pass with actual
+sampled video frames, Whisper ASR, rolling memory and optional Ollama.
+You can already change its model without changing Python:
 
-API charges are separate from ChatGPT/Codex subscriptions. Frames are
-sent to a remote service only after explicit confirmation. The tool
-requests store=false, which does not negate all service-side retention
-or data processing policies. Review the applicable terms before sending
-copyrighted footage.
+       ollama pull qwen3-vl:8b
+       python -m true_experience.local_trailer VIDEO.mp4 --context-model qwen3-vl:8b --reuse-analysis --context-output iron_man_context_qwen_private.json
 
-OpenAI API docs:
-- https://developers.openai.com/api/docs/guides/images-vision
-- https://developers.openai.com/api/docs/guides/structured-outputs
-- https://developers.openai.com/api/docs/models/gpt-5.4-mini
+Reuse requires the original PRIVATE analysis cache and matching video
+and inference settings. Context analysis still incorporates BLIP's
+original captions, so a better model alone does not validate its
+narrative output. The new shot-review JSON is intentionally a separate
+experiment and is NOT silently substituted for BLIP observations.
 
-## C. Codex/manual handoff with no API key
+## Optional OpenAI API: billed, explicit upload consent
 
-Generate a **portable folder** from exactly the same source ZIP:
+No API call is made in the default mode. For API vision reviews, first
+preview the number of images and requests:
 
-~~~powershell
-python -m true_experience.vision_handoff iron_man_shots.zip -o iron_man_codex_handoff
-~~~
+       python -m true_experience.vision_review iron_man_shots.zip --backend openai --dry-run
 
-Or start with the first 12 shots for a controlled experiment:
+Set OPENAI_API_KEY securely in your environment, and use:
 
-~~~powershell
-python -m true_experience.vision_handoff iron_man_shots.zip -o iron_man_codex_pilot --max-shots 12
-~~~
+       python -m true_experience.vision_review iron_man_shots.zip --backend openai --max-shots 12 --confirm-upload -o openai_shot_review.json
 
-The folder has:
-- shots/: midpoint JPEGs and original shot IDs/times
-- evidence/: exact v0001 etc. frame samples, if present
-- manifest.json: exact shot and evidence mapping
-- TASK.md and AGENTS.md: explicit visual-review instructions
-- shot_review.schema.json: required output structure
-- shot_review.template.json: output metadata, initially empty array
-- README.md: human workflow
+The API sends selected JPEGs and their shot IDs/timestamps, not the
+full video, speech transcript or private context file. Images are
+transmitted to OpenAI's remote API; the service is paid separately from
+ChatGPT. Use --max-shots 0 only after evaluating cost and quality on
+the pilot. Check permissions before transmitting copyrighted frames.
+The API mode requests store=false, which is not a guarantee of no data
+processing or retention under all policies.
 
-Open the folder in a Codex environment that supports JPEG inspection,
-ask it to follow TASK.md, and have it produce shot_review.json.
-This is NOT an automatic call to Codex or a promise that every Codex
-environment can view images. Codex access and API billing are distinct.
+## Validate or compare both modes
 
-The generator makes no network calls and never uploads the images. A
-human chooses whether to give the folder to another model or service.
+       python -m true_experience.vision_review_validate iron_man_shots.zip qwen_shot_review.json --max-shots 12
 
-## Comparing results without false accuracy scores
+Once a second 12-shot JSON exists:
 
-Both backend outputs use the **same per-shot fields**:
-shot_id, visible_description, visible_objects, visible_action,
-uncertainties.
+       python -m true_experience.vision_review_validate iron_man_shots.zip qwen_shot_review.json --max-shots 12 --compare openai_shot_review.json
 
-Review their validity using the original archive and matching --max-shots:
+You can also compare to an earlier pilot review when its manifest hash
+matches the same selected shots. Different wording is NOT an
+accuracy or hallucination score. Each claim still needs a comparison
+with the actual JPEG or video frames.
 
-~~~powershell
-python -m true_experience.vision_review_validate iron_man_shots.zip openai_shot_review.json --max-shots 12
-python -m true_experience.vision_review_validate iron_man_shots.zip openai_shot_review.json --max-shots 12 --compare iron_man_codex_pilot/shot_review.json
-~~~
+## Privacy and limitations
 
-The comparison reports differing wording and common shot IDs. Different
-phrases do NOT indicate that one backend is better. To evaluate precision,
-a human must check claims against the actual JPEGs and, for motion or
-narrative, the actual video/audio. Do not rank models by fluency.
+The local Ollama model receives the individual JPEGs over localhost
+127.0.0.1, and no API key is required. The optional OpenAI API sends
+images only after --confirm-upload. Neither mode automatically sends
+footage to GitHub or commits reviews. Avoid sharing source media or
+dialogue without the appropriate permissions. The JSON files themselves
+may contain descriptions of copyrighted imagery.
 
-## Privacy
-
-- Still-image ZIP and portable folder may contain copyrighted frames.
-- No media is automatically uploaded to GitHub or to this conversation.
-- The API mode is explicitly opt-in; the manual folder works entirely
-  offline until the user chooses where to process it.
-- Raw audio/ASR and private context outputs are NOT included in the new
-  visual-review API request or handoff folder.
-- Do not commit extracted images, keys or generated reviews to the repo.
+Qwen3-VL model reference: https://ollama.com/library/qwen3-vl
+Gemma 3 model reference: https://ollama.com/library/gemma3

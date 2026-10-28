@@ -1,7 +1,5 @@
-"""Unit and opt-in network regression tests for manual/OpenAI visual review."""
-import io
+"""Provider-neutral shot schema and explicit OpenAI API tests."""
 import json
-import os
 import tempfile
 import unittest
 import zipfile
@@ -12,7 +10,6 @@ from true_experience.vision_contract import (
     BATCH_SCHEMA, load_archive, source_digest, selected_shots,
     validate_batch, validate_review,
 )
-from true_experience.vision_handoff import create_handoff
 from true_experience.openai_vision_review import (
     request_payload,extract_response,review_archive,
 )
@@ -79,36 +76,6 @@ class ContractTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 load_archive(path)
 
-
-class HandoffTests(unittest.TestCase):
-    def test_handoff_contains_images_manifest_schema_and_codex_instruction(self):
-        with tempfile.TemporaryDirectory() as temp:
-            zip_path=Path(temp)/"input.zip"
-            shots=fixture_zip(zip_path)
-            target=Path(temp)/"handoff"
-            created=create_handoff(zip_path,target,max_shots=2)
-            self.assertEqual(created["shot_count"],2)
-            self.assertTrue((target/"AGENTS.md").is_file())
-            self.assertTrue((target/"TASK.md").is_file())
-            self.assertTrue((target/"shots/shot_0001.jpg").is_file())
-            self.assertFalse((target/"shots/shot_0003.jpg").exists())
-            self.assertIn("shot_review.json",(target/"TASK.md").read_text())
-            manifest=json.loads((target/"manifest.json").read_text())
-            template=json.loads((target/"shot_review.template.json").read_text())
-            schema=json.loads((target/"shot_review.schema.json").read_text())
-            self.assertEqual(manifest["source_manifest_sha256"],template["source_manifest_sha256"])
-            self.assertEqual(template["shots"],[])
-            self.assertEqual(schema["properties"]["shots"],BATCH_SCHEMA["properties"]["shots"])
-            self.assertEqual(len(manifest["shots"]),2)
-            with self.assertRaises(FileExistsError):
-                create_handoff(zip_path,target)
-
-    def test_no_network_or_models_required(self):
-        with tempfile.TemporaryDirectory() as temp:
-            archive=Path(temp)/"shots.zip"
-            fixture_zip(archive)
-            with patch("urllib.request.urlopen",side_effect=AssertionError("network called")):
-                create_handoff(archive,Path(temp)/"out")
 
 
 class OpenAIReviewTests(unittest.TestCase):

@@ -1,4 +1,4 @@
-"""Opt-in, billed OpenAI vision review of the SAME still images as Codex handoff.
+"""Opt-in, billed OpenAI vision review of the SAME archived still images as the Ollama reviewer.
 
 Do not call this from the normal video pipeline. User must set
 OPENAI_API_KEY and --confirm-upload to transmit any source imagery.
