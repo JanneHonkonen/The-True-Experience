@@ -2,48 +2,71 @@
 
 Runs on local video with FFmpeg, adding **optional local AI inference**. Captions and transcripts are model hypotheses, not verified facts. Emotion and narrative interpretation remain unimplemented.
 
-## Requirements
+## Installation: virtual environment (recommended)
 
-Python 3.10+, FFmpeg and FFprobe on PATH. No API keys are needed. Baseline processing has no third-party Python dependencies.
+Use **Python 3.11**, FFmpeg and FFprobe on `PATH`. From the repository root:
 
-## Run without models
+### Linux / macOS
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+### Windows PowerShell
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Run the commands **inside the project directory** (the one containing `requirements.txt` and `true_experience/`). `python -m ...` runs from the source checkout; an editable package installation is not necessary.
+
+If your old command `python -m pip install -e '.[all]'` failed with *not a valid editable requirement*, stop using that command and install from `requirements.txt` as shown above. This is a direct dependency list, not an editable install. `-e` is intended for installing a local Python package in editable mode, not for pointing pip at a requirements file.
+
+**Note:** installing PyTorch can take substantial disk space. On **CPU-only Linux**, you may first install the CPU build of PyTorch with `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu`, then run `python -m pip install -r requirements.txt` to install the remaining dependencies. First model inference also downloads model weights. The video is processed locally; no API key is required.
+
+## Video processing without AI models
+
+You can skip Python dependency installation entirely for basic FFmpeg-only analysis:
 
 ```bash
 python -m true_experience video.mp4 -o analysis_output.json
 python -m true_experience video.mp4 --subtitles subtitles.srt --interval 5 -o analysis_output.json
 ```
 
-## Real local speech recognition and frame captioning
+## Local speech recognition and visual captions
 
 ```bash
-python -m pip install -e '.[all]'
 python -m true_experience video.mp4 --transcribe --caption-frames --max-caption-frames 120 --caption-spacing 10 -o analysis.json
 ```
 
-Install speech or vision separately:
+For Finnish transcription, try `--whisper-model small --language fi`. These models can make mistakes, especially with music and stylized dialogue.
+
+## Iron Man trailer local-file evaluation
+
+With an authorized copy already available on your computer:
 
 ```bash
-python -m pip install -e '.[speech]'
-python -m true_experience video.mp4 --transcribe --whisper-model small --language fi -o speech.json
-
-python -m pip install -e '.[vision]'
-python -m true_experience video.mp4 --caption-frames --max-caption-frames 40 -o vision.json
+python -m true_experience.local_trailer "/path/to/iron-man-trailer.mp4" -o iron_man_review.json
 ```
 
-First model use downloads weights (internet connection required); video and audio stay local. Image captioning runs on CPU. Faster-whisper automatically selects device. Model quality and runtime vary, and Finnish speech may need a larger model than `tiny`. Transformers v4 is required by the BLIP image-to-text pipeline, removed in v5.
+Upload the generated `iron_man_review.json` for discussion, not the source movie. See [Iron Man trailer evaluation](docs/IRON_MAN_TRAILER_EVALUATION.md).
 
 ## Output fields and limitations
 
-- `shots`: FFmpeg cut candidates **not** semantically grouped scenes.
-- `silence_intervals`: thresholded silence, not audio event classification.
-- `speech_segments`: optional ASR transcripts with start/end, source, model and unknown speaker/confidence.
-- `visual_observations`: optional captions of individual sampled frames, each with precise sample time and shot ID. Samples are distributed throughout long shots (`--caption-spacing 10`, target 10 seconds) subject to the global frame cap.
-- `timeline`: interval-aligned SRT `dialogue`, ASR `speech`, sampled `visual_observations`; no extrapolation to unsampled intervals.
-- `metadata.perception`: whether optional inference was actually enabled, chosen models and sample count. `visual_sampling` reports sampled/unsampled shots, total unsampled shot duration, and largest gap between sample points (including shot boundaries). These are sampling metrics, not accuracy scores.
+- `shots`: FFmpeg shot-cut candidates, **not** semantic scenes.
+- `silence_intervals`: thresholded silence, not sound-event classification.
+- `speech_segments`: optional ASR text with timestamps and model provenance, but no reliable speaker identity.
+- `visual_observations`: optional captions from individual frames, each with sample time and shot ID.
+- `timeline`: interval-aligned subtitles, ASR and visual samples; no extrapolation to unsampled intervals.
+- `metadata.perception.visual_sampling`: sampled and unsampled shots, unsampled duration, and largest gap between sample positions.
 
-SRT and ASR are separate evidence streams; they may disagree. Model-generated captions and transcripts can hallucinate. Emotion, narrative meaning, and character identities stay `null`, and a frame caption never claims to describe an entire scene.
-
-Image captioning is capped by `--max-caption-frames` (default 120). The frame allocator gives each detected shot at least one sample when possible, then gives long shots additional evenly spaced samples toward `--caption-spacing` (default 10 seconds). If there are more shots than the cap, it samples representative shot indices and records omissions. The spacing is a *target*, not a guarantee when the cap is exhausted. Captions are still unverified hypotheses. CPU captioning and Whisper model inference may be slow for long films.
+Captions and transcription can hallucinate or miss details. Emotion, narrative and character identity are not inferred. The caption sampler favors coverage of long shots, subject to `--max-caption-frames` and `--caption-spacing`.
 
 ## Tests
 
@@ -51,15 +74,8 @@ Image captioning is capped by `--max-caption-frames` (default 120). The frame al
 python -m unittest discover -s tests -v
 ```
 
-CI uses synthetic videos and mocks inference backends; it does **not** download or benchmark pretrained model weights. A separate real-model evaluation is required before claiming real-world accuracy.
-
-## Next milestones
-
-1. Evaluate Finnish/English ASR timestamps against human annotations.
-2. Evaluate image captions and identify hallucinations.
-3. Add real sound/music event recognition and timestamped fusion.
-4. Experiment with scene continuity and narrative reasoning, keeping claims traceable to evidence.
+CI tests pipeline components and mocks inference backends; actual pretrained-model evaluation is a separate workflow. After testing, run `deactivate` to exit the virtual environment.
 
 ## License
 
-See the author's non-commercial terms in README. Review all model and dataset licenses before distributing the combined system.
+See the author's non-commercial terms in README. Review model and dataset licenses before redistributing the combined system.

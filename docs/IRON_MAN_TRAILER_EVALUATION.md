@@ -21,14 +21,37 @@ DRM, or restrictions. Respect media rights and platform conditions.
 
 Obtain a local copy that you are authorized to process using an
 appropriate lawful source, or use a different owned/licensed video.
-Install FFmpeg, Python 3.10+ and local model dependencies.
+Install FFmpeg, FFprobe and Python 3.11. Clone the repository, create a
+virtual environment **in the repository root**, then install the direct
+dependencies listed in `requirements.txt` (no editable `-e` install).
 
-    git clone https://github.com/JanneHonkonen/The-True-Experience.git
-    cd The-True-Experience
-    python -m pip install -e '.[all]'
-    python -m true_experience.local_trailer /path/to/trailer.mp4 \
-      --language en --whisper-model tiny --caption-spacing 6 \
-      --max-caption-frames 36 -o iron_man_review.json
+Linux / macOS:
+
+```bash
+git clone https://github.com/JanneHonkonen/The-True-Experience.git
+cd The-True-Experience
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m true_experience.local_trailer "/path/to/trailer.mp4" \
+  --language en --whisper-model tiny --caption-spacing 6 \
+  --max-caption-frames 36 -o iron_man_review.json
+```
+
+Windows PowerShell, from the cloned project folder:
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m true_experience.local_trailer "C:\Videos\trailer.mp4" -o iron_man_review.json
+```
+
+To leave the environment, run `deactivate`. The full installation includes
+large AI dependencies and first inference downloads model weights. Running
+`python -m ...` from the checkout requires **no** editable package install.
 
 This command runs **real local AI inference** against the supplied
 file but outputs only a **sanitized review**: media metadata, shot counts,

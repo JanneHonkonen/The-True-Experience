@@ -10,3 +10,6 @@ analysis_output.json
 *.mkv
 *.mov
 *.wav
+
+# Local evaluation artifact (can contain model-generated descriptions)
+iron_man_review.json
