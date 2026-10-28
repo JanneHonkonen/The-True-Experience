@@ -136,9 +136,9 @@ def local_ollama(messages, model, timeout=300):
     try:
         output=json.loads(body["message"]["content"])
     except (KeyError,TypeError,ValueError) as exc:
-        raise RuntimeError("Ollama did not return a JSON object") from exc
+        raise ValueError("Ollama did not return valid JSON content") from exc
     if not isinstance(output,dict):
-        raise RuntimeError("Ollama output must be a JSON object")
+        raise ValueError("Ollama JSON response must be an object")
     return output
 
 
@@ -305,10 +305,11 @@ def build_context(report,video,*,model="gemma3:4b",window_seconds=12.,
         else:
             messages=[{"role":"system","content":SYSTEM_PROMPT},message]
             for attempt in range(2):
-                output=backend(messages,model,timeout)
-                if not isinstance(output,dict):
-                    raise RuntimeError("Context backend must return a JSON object")
+                output=None
                 try:
+                    output=backend(messages,model,timeout)
+                    if not isinstance(output,dict):
+                        raise ValueError("Context backend response must be a JSON object")
                     validated=validate_hypothesis(output,current_ids,
                                                  {x["window_id"] for x in prior})
                     break
@@ -328,7 +329,8 @@ def build_context(report,video,*,model="gemma3:4b",window_seconds=12.,
                               f"abstaining after retry ({exc})",file=sys.stderr)
                         break
                     messages.extend([
-                        {"role":"assistant","content":json.dumps(output,ensure_ascii=False)},
+                        {"role":"assistant","content":json.dumps(output,ensure_ascii=False)
+                         if output is not None else "{}"},
                         {"role":"user","content":"Your JSON did not match the required schema: "
                          +str(exc)+". Return corrected JSON only, using ONLY the given "
                          "evidence IDs and previous window IDs."}
