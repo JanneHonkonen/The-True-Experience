@@ -7,6 +7,7 @@ import subprocess
 from fractions import Fraction
 from pathlib import Path
 from .srt import load_srt
+from .perception import align_observations, caption_shots, transcribe_audio
 
 PTS = re.compile(r"\bpts_time:\s*([0-9.]+)")
 SILENCE = re.compile(r"silence_(start|end):\s*([0-9.]+)")
@@ -123,7 +124,10 @@ def build_timeline(duration,interval,shots,silences,has_audio,subtitles):
     return result
 
 def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
-            silence_min_duration=.25,subtitles_path=None):
+            silence_min_duration=.25,subtitles_path=None,
+            transcribe=False,whisper_model="tiny",language=None,
+            caption_frames=False,caption_model="Salesforce/blip-image-captioning-base",
+            max_caption_frames=120):
     path=Path(video_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Video file not found: {path}")
@@ -135,6 +139,12 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         raise ValueError("Minimum silence duration must be positive")
     if not math.isfinite(interval) or interval<=0:
         raise ValueError("Interval must be positive")
+    if not isinstance(max_caption_frames,int) or isinstance(max_caption_frames,bool) or max_caption_frames<1:
+        raise ValueError("max_caption_frames must be a positive integer")
+    if transcribe and (not isinstance(whisper_model,str) or not whisper_model.strip()):
+        raise ValueError("whisper_model must be a nonempty model ID")
+    if caption_frames and (not isinstance(caption_model,str) or not caption_model.strip()):
+        raise ValueError("caption_model must be a nonempty model ID")
     for name in ("ffmpeg","ffprobe"):
         if not shutil.which(name):
             raise RuntimeError(f"{name} is required on PATH")
@@ -144,16 +154,33 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
     silences=detect_silences(path,duration,silence_db,silence_min_duration) if info["has_audio"] else []
     subtitles=load_srt(subtitles_path) if subtitles_path else []
     shots=create_shots(cuts,duration)
-    return {"schema_version":"0.1.0","metadata":{
+    if transcribe and not info["has_audio"]:
+        raise ValueError("Cannot transcribe: no audio stream in video")
+    speech=transcribe_audio(path,duration,model_name=whisper_model,language=language) if transcribe else []
+    visuals=caption_shots(path,shots,model_name=caption_model,max_frames=max_caption_frames) if caption_frames else []
+    timeline=build_timeline(duration,interval,shots,silences,info["has_audio"],subtitles)
+    align_observations(timeline,speech,visuals)
+    return {"schema_version":"0.2.0","metadata":{
         "source_file":path.name,**info,"interval_seconds":interval,
         "scene_change_threshold":scene_threshold,"silence_threshold_db":silence_db,
         "subtitle_source":Path(subtitles_path).name if subtitles_path else None,
-        "methods":["ffprobe","ffmpeg_scene_change","ffmpeg_silencedetect"]+
-                  (["srt_subtitles"] if subtitles_path else []),
+        "methods":(["ffprobe","ffmpeg_scene_change"]+
+                   (["ffmpeg_silencedetect"] if info["has_audio"] else [])+
+                   (["srt_subtitles"] if subtitles_path else [])+
+                   (["faster_whisper"] if transcribe else [])+
+                   (["blip_frame_captioning"] if caption_frames else [])),
+        "perception":{"speech_enabled":transcribe,
+                      "speech_model":whisper_model if transcribe else None,
+                      "captioning_enabled":caption_frames,
+                      "caption_model":caption_model if caption_frames else None,
+                      "caption_sample_count":len(visuals),
+                      "caption_frame_cap":max_caption_frames if caption_frames else None},
         "limitations":["Shot cuts are not semantic scenes.",
                        "Audio activity does not identify speech, sound effects or music.",
                        "Subtitles are externally supplied, not verified transcription.",
-                       "Emotion, character identities and narrative function are not inferred."]},
+                       "Model transcripts and captions may be wrong or hallucinated.",
+                       "Captured frames are samples, not descriptions of whole scenes.",
+                       "Speaker identities, emotion, and narrative function are not inferred."]},
         "shots":shots,
         "silence_intervals":[{"start_seconds":a,"end_seconds":b} for a,b in silences],
-        "timeline":build_timeline(duration,interval,shots,silences,info["has_audio"],subtitles)}
+        "speech_segments":speech,"visual_observations":visuals,"timeline":timeline}

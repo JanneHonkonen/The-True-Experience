@@ -21,11 +21,20 @@ def main(argv=None):
     p.add_argument("--silence-db",type=float,default=-35.0)
     p.add_argument("--silence-min-duration",type=positive,default=0.25)
     p.add_argument("--subtitles",help="Optional local .srt file")
+    p.add_argument("--transcribe",action="store_true",help="Run local Whisper speech recognition")
+    p.add_argument("--whisper-model",default="tiny",help="faster-whisper model ID")
+    p.add_argument("--language",help="Optional language code (e.g. fi); auto-detect if omitted")
+    p.add_argument("--caption-frames",action="store_true",help="Run local BLIP frame captioning")
+    p.add_argument("--caption-model",default="Salesforce/blip-image-captioning-base")
+    p.add_argument("--max-caption-frames",type=int,default=120,help="Maximum sampled frames to caption")
     a = p.parse_args(argv)
     try:
         result = analyze(a.video,interval=a.interval,scene_threshold=a.scene_threshold,
                          silence_db=a.silence_db,silence_min_duration=a.silence_min_duration,
-                         subtitles_path=a.subtitles)
+                         subtitles_path=a.subtitles,transcribe=a.transcribe,
+                         whisper_model=a.whisper_model,language=a.language,
+                         caption_frames=a.caption_frames,caption_model=a.caption_model,
+                         max_caption_frames=a.max_caption_frames)
         path = Path(a.output)
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_text(json.dumps(result,indent=2,ensure_ascii=False,allow_nan=False)+"\n",encoding="utf-8")

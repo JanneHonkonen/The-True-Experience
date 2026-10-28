@@ -1,25 +1,49 @@
-# The True Experience — runnable MVP v0.1
+# The True Experience — evidence-first audiovisual MVP v0.2
 
-This is an evidence-first measurement pipeline, **not** yet an AI model that understands film emotions or narratives.
+Runs on local video with FFmpeg, adding **optional local AI inference**. Captions and transcripts are model hypotheses, not verified facts. Emotion and narrative interpretation remain unimplemented.
 
 ## Requirements
 
-Python 3.10+, FFmpeg (both ffmpeg and ffprobe installed on PATH). The MVP needs no third-party Python packages, API keys, cloud services, or GPU.
+Python 3.10+, FFmpeg and FFprobe on PATH. No API keys are needed. Baseline processing has no third-party Python dependencies.
 
-## Run
+## Run without models
 
 ```bash
-python -m true_experience path/to/video.mp4 -o analysis_output.json
-python -m true_experience path/to/video.mp4 --subtitles path/to/subtitles.srt --interval 5 -o analysis_output.json
+python -m true_experience video.mp4 -o analysis_output.json
+python -m true_experience video.mp4 --subtitles subtitles.srt --interval 5 -o analysis_output.json
 ```
 
-Options: `--scene-threshold 0.3` (lower values find more visual cuts), `--silence-db -35`, `--silence-min-duration 0.25`. All media remains local.
+## Real local speech recognition and frame captioning
 
-## Output
+```bash
+python -m pip install -e '.[all]'
+python -m true_experience video.mp4 --transcribe --caption-frames --max-caption-frames 120 -o analysis.json
+```
 
-`schema_version`, `metadata`, `shots`, `silence_intervals`, and `timeline`. The timeline has fixed intervals with a shorter final interval, overlapping shot IDs and subtitle cues, cut timestamps, and audio silence state.
+Install speech or vision separately:
 
-**Measured:** video metadata, FFmpeg visual cuts (not semantic scenes), FFmpeg audio silence below a threshold (not identification of speech or music), and optionally user-provided subtitles (not ASR). **Not yet measured:** visual semantics, character identity, emotions, speaker identity, or narrative meaning. Those fields are explicitly `null`, not fabricated.
+```bash
+python -m pip install -e '.[speech]'
+python -m true_experience video.mp4 --transcribe --whisper-model small --language fi -o speech.json
+
+python -m pip install -e '.[vision]'
+python -m true_experience video.mp4 --caption-frames --max-caption-frames 40 -o vision.json
+```
+
+First model use downloads weights (internet connection required); video and audio stay local. Image captioning runs on CPU. Faster-whisper automatically selects device. Model quality and runtime vary, and Finnish speech may need a larger model than `tiny`. Transformers v4 is required by the BLIP image-to-text pipeline, removed in v5.
+
+## Output fields and limitations
+
+- `shots`: FFmpeg cut candidates **not** semantically grouped scenes.
+- `silence_intervals`: thresholded silence, not audio event classification.
+- `speech_segments`: optional ASR transcripts with start/end, source, model and unknown speaker/confidence.
+- `visual_observations`: optional captions of individual sampled frames, each with precise sample time and shot ID.
+- `timeline`: interval-aligned SRT `dialogue`, ASR `speech`, sampled `visual_observations`; no extrapolation to unsampled intervals.
+- `metadata.perception`: whether optional inference was actually enabled, chosen models and sample count.
+
+SRT and ASR are separate evidence streams; they may disagree. Model-generated captions and transcripts can hallucinate. Emotion, narrative meaning, and character identities stay `null`, and a frame caption never claims to describe an entire scene.
+
+Image captioning is capped by `--max-caption-frames` (default 120) and distributes samples over detected shots. CPU captioning and Whisper model inference may be slow for long films.
 
 ## Tests
 
@@ -27,18 +51,15 @@ Options: `--scene-threshold 0.3` (lower values find more visual cuts), `--silenc
 python -m unittest discover -s tests -v
 ```
 
-Integration tests generate synthetic videos with FFmpeg.
+CI uses synthetic videos and mocks inference backends; it does **not** download or benchmark pretrained model weights. A separate real-model evaluation is required before claiming real-world accuracy.
 
 ## Next milestones
 
-1. Benchmark shot detection against manually labeled clips and add semantic scene grouping.
-2. Add optional speech recognition with timing checks and provenance.
-3. Add vision-language captioning with model uncertainty and frame sampling.
-4. Add audio event/music models and confidence-aware multimodal fusion.
-5. Evaluate emotional and narrative interpretations against multiple human annotators, never assuming any single emotion is objectively correct.
+1. Evaluate Finnish/English ASR timestamps against human annotations.
+2. Evaluate image captions and identify hallucinations.
+3. Add real sound/music event recognition and timestamped fusion.
+4. Experiment with scene continuity and narrative reasoning, keeping claims traceable to evidence.
 
-This MVP is separate from experimental PR #1; do not merge both approaches without reconciling their APIs and tests.
+## License
 
-## Licensing
-
-See the author's non-commercial terms in the repository README. Add a complete license file and review external model licenses before distributing more broadly.
+See the author's non-commercial terms in README. Review all model and dataset licenses before distributing the combined system.
