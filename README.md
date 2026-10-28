@@ -140,3 +140,21 @@ B.Eng. Janne Honkonen
 
 ## Closing Note
 AI should not just parse cinema. It should feel it, follow it, and understand it. This concept outlines a path toward that ability - moving from data processing toward genuine emotional and narrative comprehension.
+
+
+## Alternate visual analysis backends
+
+For an independent per-shot evaluation, you can generate a **Codex/manual
+handoff folder** from the shot ZIP, or optionally use OpenAI's billed
+Responses API with explicit --confirm-upload. Both use the same shot IDs
+and JSON response schema; neither replaces FFmpeg cut detection.
+
+~~~powershell
+python -m true_experience.vision_handoff iron_man_shots.zip -o iron_man_codex_handoff
+python -m true_experience.openai_vision_review iron_man_shots.zip --dry-run --max-shots 12
+~~~
+
+For API requests, set OPENAI_API_KEY securely and add --confirm-upload.
+The default API pilot sends at most 12 shot JPEGs; usage is billed
+separately from ChatGPT. The Codex folder is created entirely offline.
+See [vision reviewer instructions](docs/VISION_REVIEW_BACKENDS.md).
