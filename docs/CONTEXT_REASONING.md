@@ -26,8 +26,12 @@ motivate the next stage; they **do not** tell us what happens in unseen shots.
      continuity suggestions, unanswered questions and explicit uncertainty,
      **plus a local evidence_index with timestamped ASR excerpts for auditing**
      (not included in the public report)
-7. Checkpoint after each completed model window. An interrupted long run
-   retains its processed private windows for inspection.
+7. Checkpoint after each completed model window. Use `--resume-context` with
+   the same model/settings and `--reuse-analysis` to skip prior completed
+   inference. Resuming checks the cached input's fingerprint.
+8. Ollama requests enforce a required-field JSON schema. If a model still
+   produces malformed or unsupported claims twice, the window explicitly
+   abstains rather than ending the entire analysis or inventing a summary.
 
 **Important:** These windows are not semantic scenes. Visual samples are
 instants, not verified motion; timestamps may not capture crucial actions.
@@ -56,6 +60,13 @@ model-server connection to external computers is supported by the code.
 Run an initial test (moderate frame cap):
 
     python -m true_experience.local_trailer "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 --max-context-images 3 -o iron_man_review.json --context-output iron_man_context_private.json
+
+To keep an expensive Whisper/BLIP run after a context failure, the program
+now saves **iron_man_analysis_private.json** automatically when `--context-model`
+is enabled. This includes raw ASR text and is excluded from Git. To reuse it,
+rerun the same command with `--reuse-analysis`; to also keep previous
+successful context windows add `--resume-context`. These options refuse
+mismatched model settings or changes to the source video.
 
 For denser visual evidence, increase --max-caption-frames to 120 and reduce
 --caption-spacing if your hardware can handle it. Larger Whisper models
@@ -87,7 +98,8 @@ causality, and unknown or missing events. Do not score solely on fluent text.
 
 The local tool sends sampled frame pixels and ASR snippets to Ollama
 at **127.0.0.1:11434 only**. It never uploads the video to GitHub.
-The context output (including ASR text excerpts) is saved to disk locally
+Both the analysis cache (including full ASR) and the context output (including
+ASR excerpts) are saved to disk locally
 and excluded from Git by .gitignore, but that does **not** encrypt it or
 protect it if you share it.
 Keep Ollama bound to localhost and treat your transcript data as private.

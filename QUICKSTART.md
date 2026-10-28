@@ -97,6 +97,17 @@ is private and can include paraphrases of speech, so inspect it before sharing.
 The ordinary `iron_man_review.json` remains sanitized and does not include
 the context text. The feature is not a film-understanding accuracy benchmark.
 
+The local model now requests a strict JSON schema from Ollama, rather than
+only requesting valid JSON. If the model nevertheless returns invalid data
+twice, the affected window is marked unverified and skipped rather than
+fabricating a story or aborting the whole film.
+
+The command saves a PRIVATE `iron_man_analysis_private.json` with the raw
+transcript and caption evidence. To retry failed context without running
+Whisper/BLIP again, run the same command with `--reuse-analysis`; add
+`--resume-context` to reuse already completed context windows. These
+cache files are excluded from Git but are not encrypted.
+
 The local model may take substantial RAM and compute time, especially on CPU.
 The existing venv requirements remain sufficient; Ollama is a separate app.
 See [context documentation](docs/CONTEXT_REASONING.md) for model constraints,

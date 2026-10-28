@@ -1,11 +1,13 @@
 import json
+import io
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from true_experience.context import (
-    build_context, choose_frames, make_windows, validate_hypothesis, local_ollama)
+    build_context, choose_frames, make_windows, validate_hypothesis,
+    local_ollama, CONTEXT_RESPONSE_SCHEMA)
 from true_experience.pipeline import create_shots, build_timeline
 from true_experience.local_trailer import main
 
@@ -166,6 +168,87 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(len(result["windows"][0]["events"]),1)
 
 
+    def test_ollama_request_enforces_required_json_schema(self):
+        captured=[]
+        class FakeHTTP:
+            def __enter__(self):
+                return io.BytesIO(json.dumps({"message":{"content":json.dumps(
+                    response("v0001",[]))}}).encode("utf-8"))
+            def __exit__(self,*args):
+                return False
+        def fake_urlopen(request, timeout):
+            captured.append((request,timeout))
+            return FakeHTTP()
+        with patch("true_experience.context.urllib.request.urlopen",
+                   side_effect=fake_urlopen):
+            output=local_ollama([{"role":"user","content":"a frame"}],"gemma3:4b")
+        self.assertEqual(output["summary"],"Unverified context hypothesis")
+        request,_=captured[0]
+        data=json.loads(request.data)
+        self.assertEqual(request.full_url,"http://127.0.0.1:11434/api/chat")
+        self.assertEqual(data["format"],CONTEXT_RESPONSE_SCHEMA)
+        self.assertIn("summary",data["format"]["required"])
+        self.assertEqual(data["format"]["properties"]["summary"]["type"],"string")
+        self.assertNotEqual(data["format"],"json")
+
+    def test_invalid_summary_twice_abstains_and_continues(self):
+        raw=analysis()
+        bad_calls=[]
+        def broken(messages,model,timeout):
+            bad_calls.append(messages)
+            return {"summary":None,"events":[],"continuity":"",
+                    "links_previous_windows":[],"open_questions":[]}
+        result=build_context(raw,Path("clip.mp4"),model="stub",backend=broken,
+                             frame_loader=lambda p,t:FakeImage())
+        self.assertEqual(len(result["windows"]),2)
+        self.assertEqual(len(bad_calls),4)
+        self.assertEqual(result["status"],"complete_with_abstentions")
+        for w in result["windows"]:
+            self.assertEqual(w["validation"],"model_response_invalid_abstained")
+            self.assertEqual(w["events"],[])
+            self.assertIn("Model summary",w["model_error"])
+
+    def test_resume_from_first_invalid_window(self):
+        raw=analysis()
+        calls=[]
+        def backend(messages,model,timeout):
+            info=json.loads(messages[1]["content"])
+            calls.append(info["window_id"])
+            ids=[x["id"] for x in info["current_evidence"]]
+            return response(ids[0],[])
+        first=build_context(raw,Path("clip.mp4"),backend=backend,
+                            frame_loader=lambda p,t:FakeImage())
+        self.assertEqual(calls,["w0001","w0002"])
+        calls.clear()
+        resumed=build_context(raw,Path("clip.mp4"),backend=backend,resume=first,
+                              frame_loader=lambda p,t:FakeImage())
+        self.assertEqual(calls,[])
+        self.assertEqual(len(resumed["windows"]),2)
+        first["windows"][1]["validation"]="model_response_invalid_abstained"
+        retry=build_context(raw,Path("clip.mp4"),backend=backend,resume=first,
+                            frame_loader=lambda p,t:FakeImage())
+        self.assertEqual(calls,["w0002"])
+        self.assertEqual(retry["status"],"complete")
+        broken=dict(first)
+        broken["analysis_fingerprint"]="wrong"
+        with self.assertRaisesRegex(ValueError,"incompatible"):
+            build_context(raw,Path("clip.mp4"),resume=broken)
+
+    def test_retry_hypothesis_with_model_wrong_summary_type(self):
+        calls=[]
+        def backend(messages,model,timeout):
+            calls.append(len(messages))
+            if len(calls)==1:
+                return {"summary":["not a summary"],"events":[],"continuity":"",
+                        "links_previous_windows":[],"open_questions":[]}
+            info=json.loads(messages[1]["content"])
+            return response(info["current_evidence"][0]["id"],[])
+        result=build_context(analysis(),Path("clip.mp4"),backend=backend,
+                             frame_loader=lambda p,t:FakeImage())
+        self.assertEqual(result["status"],"complete")
+        self.assertEqual(calls[:2],[2,4])
+
+
 class LocalTrailerContextTests(unittest.TestCase):
     def test_optional_context_file_and_public_report_remains_separate(self):
         a=analysis()
@@ -174,6 +257,7 @@ class LocalTrailerContextTests(unittest.TestCase):
             video.write_bytes(b"mock")
             public=Path(tmp)/"review.json"
             private=Path(tmp)/"context-private.json"
+            cache=Path(tmp)/"analysis-private.json"
             def produce_context(report, source, **kwargs):
                 result={"windows":[{"summary_hypothesis":"Unverified person",
                                     "evidence_ids":["v0001"],
@@ -183,7 +267,8 @@ class LocalTrailerContextTests(unittest.TestCase):
             with patch("true_experience.local_trailer.analyze",return_value=a), \
                  patch("true_experience.local_trailer.build_context",side_effect=produce_context):
                 status=main([str(video),"-o",str(public),"--context-model","gemma3:4b",
-                             "--context-output",str(private)])
+                             "--context-output",str(private),
+                             "--analysis-cache",str(cache)])
             self.assertEqual(status,0)
             self.assertTrue(public.is_file())
             self.assertTrue(private.is_file())

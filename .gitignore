@@ -17,3 +17,7 @@ iron_man_review.json
 # Unverified contextual film summaries may paraphrase transcript or other material
 iron_man_context_private.json
 *_context_private.json
+
+# Unredacted local ASR + frame metadata; never commit or share
+iron_man_analysis_private.json
+*_analysis_private.json
