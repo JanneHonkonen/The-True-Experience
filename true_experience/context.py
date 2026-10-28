@@ -145,7 +145,7 @@ def validate_hypothesis(output, current_ids, previous_ids):
         if kind not in ("observation","interpretation"):
             raise ValueError("Event kind must be observation or interpretation")
         events.append({"claim":claim,"evidence_ids":list(dict.fromkeys(ids)),"kind":kind,
-                       "grounding_review":"not_reviewed"})
+                       "human_groundedness_review":"not_reviewed"})
     links=output.get("links_previous_windows")
     if not isinstance(links,list) or any(not isinstance(x,str) or x not in previous_ids for x in links):
         raise ValueError("Memory links must reference supplied previous windows")
