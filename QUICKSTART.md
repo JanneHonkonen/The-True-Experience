@@ -163,34 +163,43 @@ CI tests pipeline components and mocks inference backends; actual pretrained-mod
 
 See the author's non-commercial terms in README. Review model and dataset licenses before redistributing the combined system.
 
-## Alternative visual reviewers: OpenAI API or Codex
+## Better visual recognition (two automatic options)
 
-A new model-neutral review interface uses the already-created
-iron_man_shots.zip. **FFmpeg still detects cuts.** These modes only
-review images from the detected shots.
+Both options use your existing iron_man_shots.zip and preserve the original
+shot IDs and timestamps. They do NOT rerun speech transcription or FFmpeg.
 
-Create the offline Codex/manual folder (NO API cost):
-
-~~~powershell
-python -m true_experience.vision_handoff iron_man_shots.zip -o iron_man_codex_handoff
-~~~
-
-It includes all source frame JPEGs, timestamps, TASK.md/AGENTS.md,
-an output JSON schema and an empty result template.
-
-Preview a paid OpenAI API pilot **without sending data**:
+Option A — local Ollama, recommended pilot (no API key):
 
 ~~~powershell
-python -m true_experience.openai_vision_review iron_man_shots.zip --max-shots 12 --dry-run
+git pull
+ollama pull qwen3-vl:8b
+python -m true_experience.vision_review iron_man_shots.zip --max-shots 12 -o qwen_shot_review.json
 ~~~
 
-After setting OPENAI_API_KEY securely, choose to upload/bill for
-12 frames explicitly:
+Ollama version 0.12.7+ is required for Qwen3-VL. The 8B model is a
+roughly 6.2GB download and may be slow on CPU. For less memory use
+--model qwen3-vl:4b; another larger option is gemma3:12b.
+
+Option B — optional OpenAI API (paid, selected source frames uploaded):
 
 ~~~powershell
-python -m true_experience.openai_vision_review iron_man_shots.zip --max-shots 12 --model gpt-5.4-mini --confirm-upload -o openai_shot_review.json
+python -m true_experience.vision_review iron_man_shots.zip --backend openai --dry-run
+python -m true_experience.vision_review iron_man_shots.zip --backend openai --max-shots 12 --confirm-upload -o openai_shot_review.json
 ~~~
 
-Do not run all 119 shots until the pilot quality/cost is acceptable.
-API calls are charged separately from ChatGPT/Codex access. Consult
-[Vision review backends](docs/VISION_REVIEW_BACKENDS.md).
+Set OPENAI_API_KEY securely first. No OpenAI API call occurs without
+--confirm-upload. It is separate from a ChatGPT subscription.
+
+To review all 119 shots, use --max-shots 0; use --resume for interrupted
+runs with matching model, backend and frame selection. Compare results:
+
+~~~powershell
+python -m true_experience.vision_review_validate iron_man_shots.zip qwen_shot_review.json --max-shots 12
+~~~
+
+This is an independent shot recognition experiment. Your existing
+multimodal context analysis still uses BLIP captions and actual video
+frames; to choose a stronger model for its context pass, use
+--context-model qwen3-vl:8b in local_trailer (and pull that model first).
+See [vision options](docs/VISION_REVIEW_BACKENDS.md).
+

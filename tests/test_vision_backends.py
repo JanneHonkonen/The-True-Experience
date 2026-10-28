@@ -1,7 +1,5 @@
 """Provider-neutral shot schema and explicit OpenAI API tests."""
-import io
 import json
-import os
 import tempfile
 import unittest
 import zipfile
