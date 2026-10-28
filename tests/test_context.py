@@ -257,6 +257,7 @@ class LocalTrailerContextTests(unittest.TestCase):
             video.write_bytes(b"mock")
             public=Path(tmp)/"review.json"
             private=Path(tmp)/"context-private.json"
+            cache=Path(tmp)/"analysis-private.json"
             def produce_context(report, source, **kwargs):
                 result={"windows":[{"summary_hypothesis":"Unverified person",
                                     "evidence_ids":["v0001"],
@@ -266,7 +267,8 @@ class LocalTrailerContextTests(unittest.TestCase):
             with patch("true_experience.local_trailer.analyze",return_value=a), \
                  patch("true_experience.local_trailer.build_context",side_effect=produce_context):
                 status=main([str(video),"-o",str(public),"--context-model","gemma3:4b",
-                             "--context-output",str(private)])
+                             "--context-output",str(private),
+                             "--analysis-cache",str(cache)])
             self.assertEqual(status,0)
             self.assertTrue(public.is_file())
             self.assertTrue(private.is_file())
