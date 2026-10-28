@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+analysis_output.json
+*_analysis.json
+*.mp4
+*.mkv
+*.mov
+*.wav
