@@ -132,6 +132,39 @@ class WindowTests(unittest.TestCase):
         self.assertEqual(local_ollama.__defaults__, (300,))
 
 
+    def test_empty_window_abstains_without_model_call(self):
+        raw=analysis()
+        raw["visual_observations"]=[]
+        raw["speech_segments"]=[]
+        def forbidden(*args):
+            raise AssertionError("Model should not invent missing evidence")
+        result=build_context(raw,Path("clip.mp4"),backend=forbidden,
+                             frame_loader=lambda p,t:FakeImage())
+        self.assertEqual(len(result["windows"]),2)
+        self.assertTrue(all(not w["events"] for w in result["windows"]))
+        self.assertTrue(all(w["summary_hypothesis"].startswith("No sampled")
+                            for w in result["windows"]))
+
+    def test_bad_model_citations_retried_once(self):
+        attempts=[]
+        def backend(messages,model,timeout):
+            attempts.append(len(messages))
+            data=json.loads(messages[1]["content"])
+            if len(attempts)==1:
+                return response("v9999",[])
+            ids=[e["id"] for e in data["current_evidence"]]
+            return response(ids[0],[])
+        raw=analysis()
+        raw["metadata"]={**raw["metadata"],"duration_seconds":12}
+        raw["shots"]=create_shots([6],12)
+        raw["visual_observations"]=raw["visual_observations"][:2]
+        raw["speech_segments"]=raw["speech_segments"][:1]
+        result=build_context(raw,Path("clip.mp4"),backend=backend,
+                             frame_loader=lambda p,t:FakeImage())
+        self.assertEqual(attempts,[2,4])
+        self.assertEqual(len(result["windows"][0]["events"]),1)
+
+
 class LocalTrailerContextTests(unittest.TestCase):
     def test_optional_context_file_and_public_report_remains_separate(self):
         a=analysis()
