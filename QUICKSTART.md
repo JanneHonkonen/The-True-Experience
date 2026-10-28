@@ -1,4 +1,4 @@
-# The True Experience — evidence-first audiovisual MVP v0.2
+# The True Experience — evidence-first audiovisual MVP v0.3
 
 Runs on local video with FFmpeg, adding **optional local AI inference**. Captions and transcripts are model hypotheses, not verified facts. Emotion and narrative interpretation remain unimplemented.
 
@@ -17,7 +17,7 @@ python -m true_experience video.mp4 --subtitles subtitles.srt --interval 5 -o an
 
 ```bash
 python -m pip install -e '.[all]'
-python -m true_experience video.mp4 --transcribe --caption-frames --max-caption-frames 120 -o analysis.json
+python -m true_experience video.mp4 --transcribe --caption-frames --max-caption-frames 120 --caption-spacing 10 -o analysis.json
 ```
 
 Install speech or vision separately:
@@ -37,13 +37,13 @@ First model use downloads weights (internet connection required); video and audi
 - `shots`: FFmpeg cut candidates **not** semantically grouped scenes.
 - `silence_intervals`: thresholded silence, not audio event classification.
 - `speech_segments`: optional ASR transcripts with start/end, source, model and unknown speaker/confidence.
-- `visual_observations`: optional captions of individual sampled frames, each with precise sample time and shot ID.
+- `visual_observations`: optional captions of individual sampled frames, each with precise sample time and shot ID. Samples are distributed throughout long shots (`--caption-spacing 10`, target 10 seconds) subject to the global frame cap.
 - `timeline`: interval-aligned SRT `dialogue`, ASR `speech`, sampled `visual_observations`; no extrapolation to unsampled intervals.
-- `metadata.perception`: whether optional inference was actually enabled, chosen models and sample count.
+- `metadata.perception`: whether optional inference was actually enabled, chosen models and sample count. `visual_sampling` reports sampled/unsampled shots, total unsampled shot duration, and largest gap between sample points (including shot boundaries). These are sampling metrics, not accuracy scores.
 
 SRT and ASR are separate evidence streams; they may disagree. Model-generated captions and transcripts can hallucinate. Emotion, narrative meaning, and character identities stay `null`, and a frame caption never claims to describe an entire scene.
 
-Image captioning is capped by `--max-caption-frames` (default 120) and distributes samples over detected shots. CPU captioning and Whisper model inference may be slow for long films.
+Image captioning is capped by `--max-caption-frames` (default 120). The frame allocator gives each detected shot at least one sample when possible, then gives long shots additional evenly spaced samples toward `--caption-spacing` (default 10 seconds). If there are more shots than the cap, it samples representative shot indices and records omissions. The spacing is a *target*, not a guarantee when the cap is exhausted. Captions are still unverified hypotheses. CPU captioning and Whisper model inference may be slow for long films.
 
 ## Tests
 

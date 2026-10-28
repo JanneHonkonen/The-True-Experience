@@ -27,6 +27,7 @@ def main(argv=None):
     p.add_argument("--caption-frames",action="store_true",help="Run local BLIP frame captioning")
     p.add_argument("--caption-model",default="Salesforce/blip-image-captioning-base")
     p.add_argument("--max-caption-frames",type=int,default=120,help="Maximum sampled frames to caption")
+    p.add_argument("--caption-spacing",type=positive,default=10.,help="Target maximum seconds per sample in each shot (budget permitting)")
     a = p.parse_args(argv)
     try:
         result = analyze(a.video,interval=a.interval,scene_threshold=a.scene_threshold,
@@ -34,7 +35,7 @@ def main(argv=None):
                          subtitles_path=a.subtitles,transcribe=a.transcribe,
                          whisper_model=a.whisper_model,language=a.language,
                          caption_frames=a.caption_frames,caption_model=a.caption_model,
-                         max_caption_frames=a.max_caption_frames)
+                         max_caption_frames=a.max_caption_frames,caption_spacing=a.caption_spacing)
         path = Path(a.output)
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_text(json.dumps(result,indent=2,ensure_ascii=False,allow_nan=False)+"\n",encoding="utf-8")
