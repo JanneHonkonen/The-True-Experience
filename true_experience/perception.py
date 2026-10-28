@@ -8,6 +8,7 @@ import io
 import math
 import subprocess
 from pathlib import Path
+from .sampling import plan_frame_samples
 
 
 def _sample_shots(shots: list[dict], limit: int) -> list[dict]:
@@ -72,9 +73,10 @@ def _extract_image(video_path: Path,timestamp: float):
 
 def caption_shots(video_path: Path,shots: list[dict], *,
                   model_name: str="Salesforce/blip-image-captioning-base",
-                  max_frames: int=120,backend=None,frame_loader=None) -> list[dict]:
-    """Caption selected frame instants, never imply full-scene observations."""
-    selected=_sample_shots(shots,max_frames)
+                  max_frames: int=120,sample_spacing: float=10.0,
+                  backend=None,frame_loader=None) -> list[dict]:
+    """Caption stratified frame instants, never imply full-scene observations."""
+    selected=plan_frame_samples(shots,max_frames,sample_spacing)
     if not selected:
         return []
     if backend is None:
@@ -85,14 +87,14 @@ def caption_shots(video_path: Path,shots: list[dict], *,
         backend=pipeline("image-to-text",model=model_name,device=-1)
     frame_loader=frame_loader or _extract_image
     output=[]
-    for shot in selected:
-        timestamp=(shot["start_seconds"]+shot["end_seconds"])/2
+    for sample in selected:
+        timestamp=sample["frame_time_seconds"]
         frame=frame_loader(video_path,timestamp)
         response=backend(frame,max_new_tokens=64)
         caption=response[0].get("generated_text","").strip() if response else ""
         if not caption:
             raise RuntimeError(f"Caption model produced no description at {timestamp:.3f}s")
-        output.append({"frame_time_seconds":round(timestamp,6),"shot_id":shot["shot_id"],
+        output.append({"frame_time_seconds":round(timestamp,6),"shot_id":sample["shot_id"],
                        "description":caption,"source":"vision_language_model",
                        "model":model_name,"confidence":None})
     return output
