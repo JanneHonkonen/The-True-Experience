@@ -21,3 +21,7 @@ iron_man_context_private.json
 # Unredacted local ASR + frame metadata; never commit or share
 iron_man_analysis_private.json
 *_analysis_private.json
+
+# Extracted source-video frames may be copyrighted
+*_shots.zip
+*_thumbnails.zip

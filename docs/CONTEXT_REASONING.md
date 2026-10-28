@@ -79,6 +79,22 @@ generate any private context file. There is no added Python dependency
 for the new logic; the vision model runs in the separately installed
 Ollama app and the existing Pillow image decoder is reused.
 
+## Inspect actual cited frames
+
+Use the opt-in shot/evidence ZIP to compare Gemma claims against pixels.
+The archive contains one image per shot and a second image for every visual
+evidence ID v0001 etc. You can generate it from your PRIVATE analysis
+cache without rerunning the models:
+
+~~~powershell
+python -m true_experience.shot_archive "C:\winstuff\ai\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
+~~~
+
+The manifest maps exact times, shots, evidence IDs and model context
+windows to JPEG files. These are frames from a copyrighted movie trailer:
+they are NEVER automatically uploaded. Only share when authorized.
+See [the image review guide](SHOT_THUMBNAILS.md).
+
 ## Output / evaluation
 
 Private JSON windows contain:
