@@ -259,9 +259,19 @@ def build_context(report,video,*,model="gemma3:4b",window_seconds=12.,
                 raise ValueError(f"Saved context window {i+1} does not match video")
             if not isinstance(item.get("summary_hypothesis"),str):
                 raise ValueError(f"Saved context window {i+1} lacks a summary")
-        result["windows"] = done[:]
+            # Prevent resuming records that reference frames or ASR from
+            # a different selection, even when the source report matches.
+            selected=choose_frames(expected["frames"],max_images)
+            ids={x["id"] for x in selected}
+            ids.update(x["id"] for x in expected["speech"][:12])
+            if item.get("evidence_ids")!=sorted(ids):
+                raise ValueError(f"Saved context evidence mismatch in {expected['window_id']}")
+        # A weak/invalid window must be retried, never cemented into memory.
+        retry_at=next((i for i,w in enumerate(done)
+                       if w.get("validation")=="model_response_invalid_abstained"),len(done))
+        result["windows"] = done[:retry_at]
         if done:
-            print(f"Resuming at context window {len(done)+1}/{len(windows)}",
+            print(f"Resuming at context window {len(result['windows'])+1}/{len(windows)}",
                   file=sys.stderr)
     for window in windows[len(result["windows"]):]:
         selected=choose_frames(window["frames"],max_images)
