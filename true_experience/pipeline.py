@@ -8,6 +8,7 @@ from fractions import Fraction
 from pathlib import Path
 from .srt import load_srt
 from .perception import align_observations, caption_shots, transcribe_audio
+from .sampling import describe_coverage
 
 PTS = re.compile(r"\bpts_time:\s*([0-9.]+)")
 SILENCE = re.compile(r"silence_(start|end):\s*([0-9.]+)")
@@ -127,7 +128,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             silence_min_duration=.25,subtitles_path=None,
             transcribe=False,whisper_model="tiny",language=None,
             caption_frames=False,caption_model="Salesforce/blip-image-captioning-base",
-            max_caption_frames=120):
+            max_caption_frames=120,caption_spacing=10.0):
     path=Path(video_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Video file not found: {path}")
@@ -141,6 +142,9 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         raise ValueError("Interval must be positive")
     if not isinstance(max_caption_frames,int) or isinstance(max_caption_frames,bool) or max_caption_frames<1:
         raise ValueError("max_caption_frames must be a positive integer")
+    if (not isinstance(caption_spacing,(int,float)) or isinstance(caption_spacing,bool) or
+        not math.isfinite(caption_spacing) or caption_spacing<=0):
+        raise ValueError("caption_spacing must be positive and finite")
     if transcribe and (not isinstance(whisper_model,str) or not whisper_model.strip()):
         raise ValueError("whisper_model must be a nonempty model ID")
     if caption_frames and (not isinstance(caption_model,str) or not caption_model.strip()):
@@ -157,10 +161,10 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
     if transcribe and not info["has_audio"]:
         raise ValueError("Cannot transcribe: no audio stream in video")
     speech=transcribe_audio(path,duration,model_name=whisper_model,language=language) if transcribe else []
-    visuals=caption_shots(path,shots,model_name=caption_model,max_frames=max_caption_frames) if caption_frames else []
+    visuals=caption_shots(path,shots,model_name=caption_model,max_frames=max_caption_frames,sample_spacing=caption_spacing) if caption_frames else []
     timeline=build_timeline(duration,interval,shots,silences,info["has_audio"],subtitles)
     align_observations(timeline,speech,visuals)
-    return {"schema_version":"0.2.0","metadata":{
+    return {"schema_version":"0.3.0","metadata":{
         "source_file":path.name,**info,"interval_seconds":interval,
         "scene_change_threshold":scene_threshold,"silence_threshold_db":silence_db,
         "subtitle_source":Path(subtitles_path).name if subtitles_path else None,
@@ -174,7 +178,9 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                       "captioning_enabled":caption_frames,
                       "caption_model":caption_model if caption_frames else None,
                       "caption_sample_count":len(visuals),
-                      "caption_frame_cap":max_caption_frames if caption_frames else None},
+                      "caption_frame_cap":max_caption_frames if caption_frames else None,
+                      "visual_sampling": ({"target_spacing_seconds":caption_spacing,
+                          **describe_coverage(shots,visuals)} if caption_frames else None)},
         "limitations":["Shot cuts are not semantic scenes.",
                        "Audio activity does not identify speech, sound effects or music.",
                        "Subtitles are externally supplied, not verified transcription.",
