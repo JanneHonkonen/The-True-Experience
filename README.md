@@ -46,6 +46,24 @@ The private context file is **excluded from Git** and may paraphrase dialogue.
 It is never included in the sanitized public report. See
 [rolling context documentation](docs/CONTEXT_REASONING.md).
 
+### Review actual shot frames alongside model evidence
+
+The local trailer command now asks at an interactive terminal whether to
+create a timestamped JPEG archive. Use --thumbnails (or --no-thumbnails)
+to explicitly choose in scripts. The ZIP contains every detected shot's
+midpoint plus the *exact* visual sample for v0001, v0002, etc.
+
+If the model run is already complete, you can generate images **without**
+running Whisper, BLIP or Gemma again:
+
+~~~powershell
+python -m true_experience.shot_archive "C:\winstuff\ai\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
+~~~
+
+See [shot image archive guide](docs/SHOT_THUMBNAILS.md) for manifest links,
+timestamp filenames, and privacy cautions. Movie frames stay local unless
+you choose to share the ZIP, which requires appropriate rights.
+
 The first model run downloads Whisper and BLIP weights; allow sufficient disk space and network access. To see available options, run `python -m true_experience.local_trailer --help`. The video remains local. Use only media you're authorized to process; the report contains no source video or full transcript. To exit the environment, use `deactivate`.
 
 If you see **`'.[all]' is not a valid editable requirement`**, use `python -m pip install -r requirements.txt` instead. `'.[all]'` is a *package extras selector*, not a filename; editable installation depends on being in the correct project directory and on a working build setup. The requirements-file command installs dependencies directly.
