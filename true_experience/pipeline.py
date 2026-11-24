@@ -168,6 +168,10 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
     if feeling_signals:
         from .signals import compute_signals
         signal_settings=compute_signals(path,info,shots,timeline)
+    feeling_curve=None
+    if feeling_signals:
+        from .fusion import fuse_timeline
+        feeling_curve=fuse_timeline(timeline)
     return {"schema_version":"0.3.0","metadata":{
         "source_file":path.name,**info,"interval_seconds":interval,
         "scene_change_threshold":scene_threshold,"silence_threshold_db":silence_db,
@@ -194,8 +198,11 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                        "Captured frames are samples, not descriptions of whole scenes.",
                        "Speaker identities, emotion, and narrative function are not inferred."]+
                       (["Feeling signals are measurements (light, motion, loudness, tempo, key), not emotions.",
-                        "Music features are computed on the full audio mix, not a separated music track."]
+                        "Music features are computed on the full audio mix, not a separated music track.",
+                        "Fused feeling (valence, arousal, tension, emotion label) is a heuristic estimate "
+                        "from measured signals, not yet validated against human ratings."]
                        if feeling_signals else [])},
         "shots":shots,
         "silence_intervals":[{"start_seconds":a,"end_seconds":b} for a,b in silences],
-        "speech_segments":speech,"visual_observations":visuals,"timeline":timeline}
+        "speech_segments":speech,"visual_observations":visuals,"timeline":timeline,
+        **({"feeling_curve":feeling_curve} if feeling_curve is not None else {})}
