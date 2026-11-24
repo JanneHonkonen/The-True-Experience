@@ -70,7 +70,7 @@ For Finnish transcription, try `--whisper-model small --language fi`. These mode
 With an authorized copy already available on your computer:
 
 ```bash
-python -m true_experience.local_trailer "/path/to/iron-man-trailer.mp4" -o iron_man_review.json
+python -m true_experience.experience "/path/to/iron-man-trailer.mp4" -o iron_man_review.json
 ```
 
 Upload the generated `iron_man_review.json` for discussion, not the source movie. See [Iron Man trailer evaluation](docs/IRON_MAN_TRAILER_EVALUATION.md).
@@ -88,7 +88,7 @@ ollama pull gemma3:4b
 Then in your activated venv run from the repository root:
 
 ```powershell
-python -m true_experience.local_trailer "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 --max-context-images 3 -o iron_man_review.json --context-output iron_man_context_private.json
+python -m true_experience.experience "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 --max-context-images 3 -o iron_man_review.json --context-output iron_man_context_private.json
 ```
 
 This adds **model-generated interpretations** grounded to named visual/audio
@@ -200,6 +200,6 @@ python -m true_experience.vision_review_validate iron_man_shots.zip qwen_shot_re
 This is an independent shot recognition experiment. Your existing
 multimodal context analysis still uses BLIP captions and actual video
 frames; to choose a stronger model for its context pass, use
---context-model qwen3-vl:8b in local_trailer (and pull that model first).
+--context-model qwen3-vl:8b in true_experience.experience (and pull that model first).
 See [vision options](docs/VISION_REVIEW_BACKENDS.md).
 

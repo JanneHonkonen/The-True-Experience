@@ -1,7 +1,9 @@
-"""Evaluate a user-provided local copy of the selected trailer.
+"""Full local perception run on any user-provided video.
 
-No video downloading, authentication or GitHub media uploads. This outputs a
-sanitized, timestamp-linked report; transient ASR text stays in process memory.
+Runs shots, speech, frame captions and (optionally) rolling local context,
+then writes a sanitized shareable report plus private caches. No video
+downloading, authentication or uploads. Also available as
+``python -m true_experience.experience``.
 """
 from __future__ import annotations
 
@@ -37,19 +39,34 @@ def positive(value: str) -> float:
     return result
 
 
+def default_paths(video: Path, output: Path | None) -> dict:
+    """Derive output names from the video, keeping older ``*_review.json`` naming.
+
+    ``-o iron_man_review.json`` -> ``iron_man_context_private.json`` and
+    ``iron_man_analysis_private.json``, matching earlier releases.
+    """
+    output = output or video.with_name(video.stem + "_review.json")
+    base = output.stem[:-len("_review")] if output.stem.endswith("_review") and output.stem != "_review" else output.stem
+    return {"output": output,
+            "context_output": output.with_name(base + "_context_private.json"),
+            "analysis_cache": output.with_name(base + "_analysis_private.json")}
+
+
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description="Evaluate local Iron Man trailer with AI")
+    p = argparse.ArgumentParser(description="Analyze a local video with local AI perception")
     p.add_argument("video", type=Path, help="Legally obtained video file; never uploaded by this program")
-    p.add_argument("-o", "--output", type=Path, default=Path("iron_man_review.json"))
-    p.add_argument("--video-id", default="8ugaeA-nMTc")
+    p.add_argument("-o", "--output", type=Path,
+                   help="Sanitized shareable report; defaults to <video name>_review.json")
+    p.add_argument("--video-id", help="Optional YouTube ID of the same video, for timestamped review links")
+    p.add_argument("--title", help="Optional human-readable source title for the report")
     p.add_argument("--whisper-model", default="tiny")
     p.add_argument("--language", default="en")
     p.add_argument("--max-caption-frames", type=int, default=36)
     p.add_argument("--caption-spacing", type=positive, default=6.0)
     p.add_argument("--interval", type=positive, default=5.0)
     p.add_argument("--context-model", help="Opt-in local Ollama vision model, e.g. gemma3:4b")
-    p.add_argument("--context-output", type=Path, default=Path("iron_man_context_private.json"),
-                   help="Private model-hypothesis analysis; do not publish without review")
+    p.add_argument("--context-output", type=Path,
+                   help="Private model-hypothesis analysis (default derived from --output); do not publish without review")
     p.add_argument("--context-window", type=positive, default=12.0,
                    help="Length of contextual analysis window in seconds (not a scene)")
     p.add_argument("--max-context-images", type=int, default=3,
@@ -57,8 +74,7 @@ def main(argv=None) -> int:
     p.add_argument("--context-timeout", type=positive, default=300.0,
                    help="Timeout per local Ollama model inference, in seconds")
     p.add_argument("--analysis-cache",type=Path,
-                   default=Path("iron_man_analysis_private.json"),
-                   help="PRIVATE full ASR/BLIP cache used when context-model is enabled")
+                   help="PRIVATE full ASR/BLIP cache used when context-model is enabled (default derived from --output)")
     p.add_argument("--reuse-analysis",action="store_true",
                    help="Reuse validated PRIVATE source analysis; skip Whisper and BLIP")
     p.add_argument("--resume-context",action="store_true",
@@ -71,6 +87,10 @@ def main(argv=None) -> int:
     p.add_argument("--thumbnails-output",type=Path,
                    help="ZIP destination; defaults to <public_report_stem>_shots.zip")
     args = p.parse_args(argv)
+    defaults = default_paths(args.video, args.output)
+    args.output = args.output or defaults["output"]
+    args.context_output = args.context_output or defaults["context_output"]
+    args.analysis_cache = args.analysis_cache or defaults["analysis_cache"]
     try:
         if not args.video.is_file():
             raise FileNotFoundError(f"Video file not found: {args.video}")
@@ -115,7 +135,7 @@ def main(argv=None) -> int:
                     "cache_version":1,"signature":signature,"report":result,
                     "privacy":"PRIVATE: contains raw speech transcription; never publish"})
                 print(f"Private analysis cache saved at {args.analysis_cache}",file=sys.stderr)
-        public_report = make_review(result, args.video_id)
+        public_report = make_review(result, args.video_id, source_title=args.title)
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
             json.dumps(public_report, ensure_ascii=False, indent=2, allow_nan=False)+"\n",

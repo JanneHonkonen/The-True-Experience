@@ -122,3 +122,18 @@ class IntegrationFlagsTests(unittest.TestCase):
                             str(path)],check=True,capture_output=True)
             with self.assertRaisesRegex(ValueError,"no audio stream"):
                 analyze(path,transcribe=True)
+
+
+class ImportErrorMessageTests(unittest.TestCase):
+    def test_speech_import_failure_reports_real_cause_and_interpreter(self):
+        import sys
+        from unittest.mock import patch
+        from true_experience.perception import transcribe_audio
+        with patch.dict(sys.modules, {"faster_whisper": None}):
+            with self.assertRaises(RuntimeError) as ctx:
+                transcribe_audio("x.mp4", 10.0)
+        message = str(ctx.exception)
+        self.assertIn("ModuleNotFoundError: import of faster_whisper halted", message)
+        self.assertIn(sys.executable, message)
+        self.assertIn("pip install -r requirements.txt", message)
+        self.assertNotIn(".[speech]", message)
