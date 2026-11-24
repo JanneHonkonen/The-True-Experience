@@ -35,12 +35,39 @@ def _reading(valence, arousal, confidence, basis, **extra):
 
 # ----------------------------------------------------------- readings ----
 
-def read_pacing(pacing):
+# Viewers adapt: a trailer that is always fast and loud is not equally intense
+# everywhere. Pacing and loudness are judged partly against the film's own
+# typical level (median and spread), once there are enough windows.
+RELATIVE_SHARE = 0.6
+MIN_WINDOWS_FOR_BASELINE = 6
+
+
+def baseline(values):
+    """Median and half the 10-90 percentile spread, or None with too little data."""
+    vals = sorted(v for v in values if v is not None)
+    if len(vals) < MIN_WINDOWS_FOR_BASELINE:
+        return None
+    def pct(q):
+        i = q * (len(vals) - 1)
+        lo, hi = int(math.floor(i)), int(math.ceil(i))
+        return vals[lo] + (vals[hi] - vals[lo]) * (i - lo)
+    return {"median": pct(0.5), "spread": max((pct(0.9) - pct(0.1)) / 2, 1e-6)}
+
+
+def _blend(absolute, value, base):
+    if base is None:
+        return absolute
+    relative = _clip((value - base["median"]) / base["spread"])
+    return _clip((1 - RELATIVE_SHARE) * absolute + RELATIVE_SHARE * relative)
+
+
+def read_pacing(pacing, base=None):
     cpm = (pacing or {}).get("cuts_per_minute")
     if cpm is None:
         return None
     # 10 cuts/min is neutral; 30+ is frantic; 0 is calm.
-    return _reading(None, _clip((cpm - 10.0) / 20.0), 0.5, ["cuts_per_minute"])
+    arousal = _blend(_clip((cpm - 10.0) / 20.0), cpm, base)
+    return _reading(None, arousal, 0.5, ["cuts_per_minute"] + (["film_baseline"] if base else []))
 
 
 def read_look(look):
@@ -70,18 +97,20 @@ def read_music(audio):
         drive = _clip(0.5 * drive + 0.5 * (tempo - 100.0) / 60.0)
     if valence is None and tempo is None:
         return None
-    confidence = 0.6 * max(mode_conf, (audio.get("tempo_confidence") or 0.0))
+    # Key and tempo come from the full mix (dialogue and effects included) and
+    # flip easily between windows, so music counts for little until separation.
+    confidence = 0.35 * max(mode_conf, (audio.get("tempo_confidence") or 0.0))
     return _reading(valence, drive, confidence,
                     [k for k, v in (("mode", valence), ("tempo_bpm", tempo)) if v is not None] +
                     ["onset_rate_per_second"], mode=mode if valence is not None else None)
 
 
-def read_sound(audio, silence_state):
+def read_sound(audio, silence_state, base=None):
     if silence_state == "silent":
         return _reading(None, -0.6, 0.5, ["silence"], startle=False)
     if not audio or audio.get("rms_dbfs") is None:
         return None
-    loud = _clip((audio["rms_dbfs"] + 35.0) / 20.0)
+    loud = _blend(_clip((audio["rms_dbfs"] + 35.0) / 20.0), audio["rms_dbfs"], base)
     startle = bool(audio.get("startle"))
     arousal = _clip(loud + (0.6 if startle else 0.0))
     return _reading(-0.3 if startle else None, arousal, 0.5 if startle else 0.4,
@@ -138,6 +167,12 @@ def fuse_timeline(timeline):
     state_v = state_a = None
     previous_peak = None
     curve = {"start_seconds": [], "valence": [], "arousal": [], "tension": [], "label": []}
+    windows = [w for w in timeline if w.get("feeling_signals")]
+    pace_base = baseline([(w["feeling_signals"].get("pacing") or {}).get("cuts_per_minute")
+                          for w in windows])
+    loud_base = baseline([(w["feeling_signals"].get("audio") or {}).get("rms_dbfs")
+                          for w in windows
+                          if (w.get("audio") or {}).get("state") != "silent"])
     for window in timeline:
         signals = window.get("feeling_signals")
         if not signals:
@@ -145,10 +180,10 @@ def fuse_timeline(timeline):
         length = window["end_seconds"] - window["start_seconds"]
         silence_state = (window.get("audio") or {}).get("state")
         readings = {k: v for k, v in {
-            "pacing": read_pacing(signals.get("pacing")),
+            "pacing": read_pacing(signals.get("pacing"), pace_base),
             "look": read_look(signals.get("look")),
             "music": read_music(signals.get("audio")),
-            "sound": read_sound(signals.get("audio"), silence_state),
+            "sound": read_sound(signals.get("audio"), silence_state, loud_base),
         }.items() if v is not None}
         v_now, v_weight = _weighted(readings, "valence")
         a_now, a_weight = _weighted(readings, "arousal")
@@ -187,6 +222,7 @@ def fuse_timeline(timeline):
         for key, value in (("valence", valence), ("arousal", arousal), ("tension", tension)):
             curve[key].append(_r(value))
         curve["label"].append(label)
+    curve["baselines"] = {"cuts_per_minute": pace_base, "rms_dbfs": loud_base}
     curve["turning_points"] = turning_points(curve)
     curve["method"] = VERSION
     return curve
