@@ -30,6 +30,10 @@ def main(argv=None):
     p.add_argument("--caption-spacing",type=positive,default=10.,help="Target maximum seconds per sample in each shot (budget permitting)")
     p.add_argument("--feeling-signals",action="store_true",
                    help="Measure pacing, look, loudness, tempo and key per interval and fuse them into an emotional timeline (CPU, needs NumPy)")
+    p.add_argument("--visual-mood-model",metavar="MODEL",
+                   help="Local Ollama vision model for visual mood, e.g. qwen3.5:9b; implies --feeling-signals")
+    p.add_argument("--visual-mood-frames",type=int,default=6,
+                   help="Frames per interval sent to the visual mood model (1-8)")
     a = p.parse_args(argv)
     try:
         result = analyze(a.video,interval=a.interval,scene_threshold=a.scene_threshold,
@@ -38,7 +42,8 @@ def main(argv=None):
                          whisper_model=a.whisper_model,language=a.language,
                          caption_frames=a.caption_frames,caption_model=a.caption_model,
                          max_caption_frames=a.max_caption_frames,caption_spacing=a.caption_spacing,
-                         feeling_signals=a.feeling_signals)
+                         feeling_signals=a.feeling_signals or bool(a.visual_mood_model),
+                         visual_mood_model=a.visual_mood_model,visual_mood_frames=a.visual_mood_frames)
         path = Path(a.output)
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_text(json.dumps(result,indent=2,ensure_ascii=False,allow_nan=False)+"\n",encoding="utf-8")
