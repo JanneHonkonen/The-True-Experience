@@ -128,7 +128,8 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             silence_min_duration=.25,subtitles_path=None,
             transcribe=False,whisper_model="tiny",language=None,
             caption_frames=False,caption_model="Salesforce/blip-image-captioning-base",
-            max_caption_frames=120,caption_spacing=10.0,feeling_signals=False):
+            max_caption_frames=120,caption_spacing=10.0,feeling_signals=False,
+            visual_mood_model=None,visual_mood_frames=6):
     path=Path(video_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Video file not found: {path}")
@@ -168,6 +169,11 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
     if feeling_signals:
         from .signals import compute_signals
         signal_settings=compute_signals(path,info,shots,timeline)
+    visual_mood_settings=None
+    if feeling_signals and visual_mood_model:
+        from .visual_mood import analyze_visual_mood
+        visual_mood_settings=analyze_visual_mood(path,timeline,model=visual_mood_model,
+                                                 frames_per_window=visual_mood_frames)
     feeling_curve=None
     if feeling_signals:
         from .fusion import fuse_timeline
@@ -181,8 +187,10 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                    (["srt_subtitles"] if subtitles_path else [])+
                    (["faster_whisper"] if transcribe else [])+
                    (["blip_frame_captioning"] if caption_frames else [])+
-                   (["cpu_feeling_signals"] if feeling_signals else [])),
+                   (["cpu_feeling_signals"] if feeling_signals else [])+
+                   (["ollama_visual_mood"] if visual_mood_settings else [])),
         "feeling_signals":signal_settings,
+        "visual_mood":visual_mood_settings,
         "perception":{"speech_enabled":transcribe,
                       "speech_model":whisper_model if transcribe else None,
                       "captioning_enabled":caption_frames,

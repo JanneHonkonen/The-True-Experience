@@ -14,7 +14,9 @@ import math
 VERSION = "fusion_v1_signals"
 
 # Priority from the specification: dialogue > music > visual tone.
-WEIGHTS = {"voice": 1.0, "music": 0.8, "look": 0.6, "sound": 0.5, "pacing": 0.4}
+# "visual" is the VLM's reading of the frames; "look" is the low-level light/colour
+# measurement. Together they carry the visual-tone weight.
+WEIGHTS = {"voice": 1.0, "music": 0.8, "visual": 0.6, "look": 0.4, "sound": 0.5, "pacing": 0.4}
 CONFLICT_MIN_CONFIDENCE = 0.3
 CONFLICT_VALENCE_GAP = 0.8
 CARRY_HALF_LIFE_SECONDS = 5.0
@@ -53,6 +55,15 @@ def read_look(look):
     basis = ["brightness", "contrast", "saturation", "warmth"] + (["motion"] if m is not None else [])
     return _reading(valence, arousal, 0.35 if m is not None else 0.25, basis,
                     darkness=_r(_clip((0.35 - b) / 0.35, 0.0, 1.0)))
+
+
+def read_visual(mood):
+    """The visual-mood model's own valence/arousal, scaled by its stated confidence."""
+    if not mood:
+        return None
+    return _reading(mood["visual_valence"], mood["visual_arousal"], 0.8 * mood["confidence"],
+                    ["visual_mood_model"], lighting=mood.get("lighting"),
+                    mood_words=mood.get("mood_words", []))
 
 
 def read_music(audio):
@@ -127,7 +138,7 @@ def find_conflicts(readings):
                  any(readings.get(o) and readings[o]["valence"] is not None and
                      readings[o]["valence"] < -0.3 and
                      readings[o]["confidence"] >= CONFLICT_MIN_CONFIDENCE
-                     for o in ("look", "voice")))
+                     for o in ("look", "visual", "voice")))
     return conflicts, irony
 
 
@@ -147,6 +158,7 @@ def fuse_timeline(timeline):
         readings = {k: v for k, v in {
             "pacing": read_pacing(signals.get("pacing")),
             "look": read_look(signals.get("look")),
+            "visual": read_visual(signals.get("visual_mood")),
             "music": read_music(signals.get("audio")),
             "sound": read_sound(signals.get("audio"), silence_state),
         }.items() if v is not None}
