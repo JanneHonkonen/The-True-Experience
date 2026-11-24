@@ -88,7 +88,7 @@ ollama pull gemma3:4b
 Then in your activated venv run from the repository root:
 
 ```powershell
-python -m true_experience.experience "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 --max-context-images 3 -o iron_man_review.json --context-output iron_man_context_private.json
+python -m true_experience.experience "C:\Videos\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 --max-context-images 3 -o iron_man_review.json --context-output iron_man_context_private.json
 ```
 
 This adds **model-generated interpretations** grounded to named visual/audio
@@ -132,7 +132,7 @@ You can create a ZIP NOW, using your existing private analysis files and
 **without rerunning any AI inference**:
 
 ~~~powershell
-python -m true_experience.shot_archive "C:\winstuff\ai\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
+python -m true_experience.shot_archive "C:\Videos\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
 ~~~
 
 The archive contains JPEG frames from your source video. It does not
