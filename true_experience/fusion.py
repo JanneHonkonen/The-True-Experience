@@ -84,6 +84,49 @@ def read_look(look):
                     darkness=_r(_clip((0.35 - b) / 0.35, 0.0, 1.0)))
 
 
+def read_voice(speech, start, end, loud_base=None):
+    """How lines are delivered in this window: prosody, plus voice emotion if measured."""
+    parts = []
+    for seg in speech or []:
+        voice = seg.get("voice")
+        overlap = min(end, seg["end_seconds"]) - max(start, seg["start_seconds"])
+        if voice and overlap > 0:
+            parts.append((overlap, voice))
+    if not parts:
+        return None
+    total = sum(w for w, _ in parts)
+
+    def avg(key, sub=None):
+        vals = [(w, (v.get(sub) or {}).get(key) if sub else v.get(key)) for w, v in parts]
+        vals = [(w, x) for w, x in vals if x is not None]
+        return sum(w * x for w, x in vals) / sum(w for w, _ in vals) if vals else None
+
+    variability, rate, loud = avg("pitch_variability_semitones"), avg("words_per_second"), avg("loudness_dbfs")
+    terms = []
+    if variability is not None:
+        terms.append(_clip((variability - 3.0) / 2.0))
+    if rate is not None:
+        terms.append(_clip((rate - 2.5) / 1.5))
+    if loud is not None:
+        terms.append(_blend(_clip((loud + 30.0) / 15.0), loud, loud_base))
+    arousal = sum(terms) / len(terms) if terms else None
+    emotion_v, emotion_a, emotion_score = avg("valence", "emotion"), avg("arousal", "emotion"), avg("score", "emotion")
+    coverage = min(1.0, total / max(1e-6, (end - start) * 0.5))
+    if emotion_v is not None:
+        arousal = emotion_a if arousal is None else 0.5 * arousal + 0.5 * emotion_a
+        confidence = (0.3 + 0.5 * (emotion_score or 0.0)) * coverage
+    else:
+        confidence = 0.35 * coverage
+    if arousal is None and emotion_v is None:
+        return None
+    labels = sorted({(v.get("emotion") or {}).get("label") for _, v in parts} - {None})
+    speakers = sorted({seg.get("speaker") for seg in speech or [] if seg.get("speaker")})
+    return _reading(emotion_v, arousal, confidence,
+                    [b for b, x in (("voice_emotion_model", emotion_v), ("pitch_variability", variability),
+                                    ("speaking_rate", rate), ("voice_loudness", loud)) if x is not None],
+                    emotions=labels, speakers=speakers, speech_seconds=_r(total))
+
+
 def read_visual(mood):
     """The visual-mood model's own valence/arousal, scaled by its stated confidence."""
     if not mood:
@@ -184,6 +227,8 @@ def fuse_timeline(timeline):
     loud_base = baseline([(w["feeling_signals"].get("audio") or {}).get("rms_dbfs")
                           for w in windows
                           if (w.get("audio") or {}).get("state") != "silent"])
+    voice_base = baseline([(seg.get("voice") or {}).get("loudness_dbfs")
+                           for w in windows for seg in (w.get("speech") or [])])
     for window in timeline:
         signals = window.get("feeling_signals")
         if not signals:
@@ -194,6 +239,8 @@ def fuse_timeline(timeline):
             "pacing": read_pacing(signals.get("pacing"), pace_base),
             "look": read_look(signals.get("look")),
             "visual": read_visual(signals.get("visual_mood")),
+            "voice": read_voice(window.get("speech"), window["start_seconds"],
+                                window["end_seconds"], voice_base),
             "music": read_music(signals.get("audio")),
             "sound": read_sound(signals.get("audio"), silence_state, loud_base),
         }.items() if v is not None}

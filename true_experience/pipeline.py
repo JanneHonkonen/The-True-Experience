@@ -129,7 +129,8 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             transcribe=False,whisper_model="tiny",language=None,
             caption_frames=False,caption_model="Salesforce/blip-image-captioning-base",
             max_caption_frames=120,caption_spacing=10.0,feeling_signals=False,
-            visual_mood_model=None,visual_mood_frames=6):
+            visual_mood_model=None,visual_mood_frames=6,
+            voice=False,voice_emotion_model="superb/wav2vec2-base-superb-er"):
     path=Path(video_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Video file not found: {path}")
@@ -172,6 +173,11 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         raise ValueError("Cannot transcribe: no audio stream in video")
     speech=transcribe_audio(path,duration,model_name=whisper_model,language=language) if transcribe else []
     if transcribe: lap("speech")
+    voice_settings=None
+    if voice and speech:
+        from .voice import analyze_voice
+        voice_settings=analyze_voice(path,speech,emotion_model=voice_emotion_model or None)
+        lap("voice")
     visuals=caption_shots(path,shots,model_name=caption_model,max_frames=max_caption_frames,sample_spacing=caption_spacing) if caption_frames else []
     if caption_frames: lap("frame_captions")
     timeline=build_timeline(duration,interval,shots,silences,info["has_audio"],subtitles)
@@ -204,9 +210,11 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                    (["faster_whisper"] if transcribe else [])+
                    (["blip_frame_captioning"] if caption_frames else [])+
                    (["cpu_feeling_signals"] if feeling_signals else [])+
-                   (["ollama_visual_mood"] if visual_mood_settings else [])),
+                   (["ollama_visual_mood"] if visual_mood_settings else [])+
+                   (["voice_prosody_and_emotion"] if voice_settings else [])),
         "feeling_signals":signal_settings,
         "visual_mood":visual_mood_settings,
+        "voice":voice_settings,
         "timing_seconds":timing,
         "perception":{"speech_enabled":transcribe,
                       "speech_model":whisper_model if transcribe else None,
