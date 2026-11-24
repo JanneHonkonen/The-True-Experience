@@ -11,6 +11,16 @@ from pathlib import Path
 from .sampling import plan_frame_samples
 
 
+def _missing(feature: str, exc: ImportError) -> RuntimeError:
+    """Explain an import failure with the real cause and the interpreter in use."""
+    import sys
+    return RuntimeError(
+        f"{feature} could not import its dependencies: {type(exc).__name__}: {exc}. "
+        f"Python in use: {sys.executable} ({sys.version.split()[0]}). "
+        "Activate the project's .venv (Python 3.11 recommended) and run "
+        "'python -m pip install -r requirements.txt'.")
+
+
 def _sample_shots(shots: list[dict], limit: int) -> list[dict]:
     """Pick capped, distributed shots; one actual frame per chosen shot."""
     if not isinstance(limit,int) or isinstance(limit,bool) or limit<1:
@@ -31,7 +41,7 @@ def transcribe_audio(video_path: Path, duration: float, *, model_name: str="tiny
         try:
             from faster_whisper import WhisperModel
         except ImportError as exc:
-            raise RuntimeError("Speech recognition requires: pip install '.[speech]'") from exc
+            raise _missing("Speech recognition (faster-whisper)", exc) from exc
         backend=WhisperModel(model_name,device="auto",compute_type="default")
     segments,info=backend.transcribe(str(video_path),language=language,beam_size=5,vad_filter=True)
     lang=getattr(info,"language",None)
@@ -59,7 +69,7 @@ def _extract_image(video_path: Path,timestamp: float):
     try:
         from PIL import Image
     except ImportError as exc:
-        raise RuntimeError("Image captioning requires: pip install '.[vision]'") from exc
+        raise _missing("Image captioning", exc) from exc
     command=["ffmpeg","-hide_banner","-nostdin","-v","error","-ss",
              f"{timestamp:.6f}","-i",str(video_path),"-map","0:v:0","-frames:v","1",
              "-vf","scale=640:-2","-f","image2pipe","-vcodec","png","pipe:1"]
@@ -83,7 +93,7 @@ def caption_shots(video_path: Path,shots: list[dict], *,
         try:
             from transformers import pipeline
         except ImportError as exc:
-            raise RuntimeError("Image captioning requires: pip install '.[vision]'") from exc
+            raise _missing("Image captioning", exc) from exc
         backend=pipeline("image-to-text",model=model_name,device=-1)
     frame_loader=frame_loader or _extract_image
     output=[]
