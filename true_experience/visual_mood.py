@@ -70,7 +70,9 @@ Rules:
 - confidence: how clearly the frames show the mood (0..1). Dark or ambiguous frames -> lower.
 - "measured_signals" are computed measurements for this window (light, motion, sound);
   use them as context, but trust what you see.
-- evidence: one short sentence naming the visible details behind your judgement.
+- evidence: ONE sentence of at most 30 words naming the visible details behind your judgement.
+- Use the full valence/arousal range when the frames justify it (explosions, fights, joy, grief);
+  reserve values near 0 for genuinely neutral moments.
 Answer with JSON matching the schema only."""
 
 
