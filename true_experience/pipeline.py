@@ -128,7 +128,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             silence_min_duration=.25,subtitles_path=None,
             transcribe=False,whisper_model="tiny",language=None,
             caption_frames=False,caption_model="Salesforce/blip-image-captioning-base",
-            max_caption_frames=120,caption_spacing=10.0):
+            max_caption_frames=120,caption_spacing=10.0,feeling_signals=False):
     path=Path(video_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Video file not found: {path}")
@@ -164,6 +164,10 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
     visuals=caption_shots(path,shots,model_name=caption_model,max_frames=max_caption_frames,sample_spacing=caption_spacing) if caption_frames else []
     timeline=build_timeline(duration,interval,shots,silences,info["has_audio"],subtitles)
     align_observations(timeline,speech,visuals)
+    signal_settings=None
+    if feeling_signals:
+        from .signals import compute_signals
+        signal_settings=compute_signals(path,info,shots,timeline)
     return {"schema_version":"0.3.0","metadata":{
         "source_file":path.name,**info,"interval_seconds":interval,
         "scene_change_threshold":scene_threshold,"silence_threshold_db":silence_db,
@@ -172,7 +176,9 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                    (["ffmpeg_silencedetect"] if info["has_audio"] else [])+
                    (["srt_subtitles"] if subtitles_path else [])+
                    (["faster_whisper"] if transcribe else [])+
-                   (["blip_frame_captioning"] if caption_frames else [])),
+                   (["blip_frame_captioning"] if caption_frames else [])+
+                   (["cpu_feeling_signals"] if feeling_signals else [])),
+        "feeling_signals":signal_settings,
         "perception":{"speech_enabled":transcribe,
                       "speech_model":whisper_model if transcribe else None,
                       "captioning_enabled":caption_frames,
@@ -186,7 +192,10 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                        "Subtitles are externally supplied, not verified transcription.",
                        "Model transcripts and captions may be wrong or hallucinated.",
                        "Captured frames are samples, not descriptions of whole scenes.",
-                       "Speaker identities, emotion, and narrative function are not inferred."]},
+                       "Speaker identities, emotion, and narrative function are not inferred."]+
+                      (["Feeling signals are measurements (light, motion, loudness, tempo, key), not emotions.",
+                        "Music features are computed on the full audio mix, not a separated music track."]
+                       if feeling_signals else [])},
         "shots":shots,
         "silence_intervals":[{"start_seconds":a,"end_seconds":b} for a,b in silences],
         "speech_segments":speech,"visual_observations":visuals,"timeline":timeline}
