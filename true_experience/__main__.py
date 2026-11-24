@@ -48,6 +48,9 @@ def main(argv=None):
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_text(json.dumps(result,indent=2,ensure_ascii=False,allow_nan=False)+"\n",encoding="utf-8")
         print(f"Saved {len(result['shots'])} shots and {len(result['timeline'])} intervals to {path}")
+        timing=result["metadata"].get("timing_seconds") or {}
+        if timing:
+            print("Timing (s): "+", ".join(f"{k}={v}" for k,v in timing.items()))
         return 0
     except (ValueError,OSError,RuntimeError) as exc:
         print(f"Analysis failed: {exc}",file=sys.stderr)
