@@ -133,7 +133,7 @@ class ImportErrorMessageTests(unittest.TestCase):
             with self.assertRaises(RuntimeError) as ctx:
                 transcribe_audio("x.mp4", 10.0)
         message = str(ctx.exception)
-        self.assertIn("ImportError", message)
+        self.assertIn("ModuleNotFoundError: import of faster_whisper halted", message)
         self.assertIn(sys.executable, message)
         self.assertIn("pip install -r requirements.txt", message)
         self.assertNotIn(".[speech]", message)
