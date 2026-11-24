@@ -192,8 +192,9 @@ def main(argv=None):
     p.add_argument("--analysis",type=Path,required=True,
                    help="Unredacted analysis JSON or the PRIVATE analysis cache")
     p.add_argument("--context",type=Path,help="Optional PRIVATE context JSON to map model-used evidence IDs")
-    p.add_argument("-o","--output",type=Path,default=Path("iron_man_shots.zip"))
+    p.add_argument("-o","--output",type=Path,help="ZIP destination; defaults to <video name>_shots.zip")
     args=p.parse_args(argv)
+    args.output=args.output or args.video.with_name(args.video.stem+"_shots.zip")
     try:
         report=_read_analysis(args.analysis,args.video)
         context=json.loads(args.context.read_text(encoding="utf-8")) if args.context else None
