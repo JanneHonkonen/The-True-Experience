@@ -57,9 +57,9 @@ do not create the signals.
 | 4 | Speech and voice | transcript; speaker turns; pitch, loudness, speaking rate; voice arousal/valence | faster-whisper `large-v3-turbo` int8; speaker embeddings + clustering; small speech-emotion model | ~3 GB |
 | 5 | Music | music present, tempo, major/minor mode, energy, onset density, mood tags | librosa (CPU) + CLAP zero-shot prompts | ~1 GB |
 | 6 | Sound events | explosions, gunshots, crowd, rain, footsteps; sudden loud onsets ("startle") | PANNs CNN14 (AudioSet labels) | <1 GB |
-| 7 | Visual mood | lighting, colour mood, facial expression, action intensity per window | Qwen3-VL 8B Q4 via Ollama | ~6-7 GB |
+| 7 | Visual mood | lighting, colour mood, facial expression, action intensity per window, from a short frame sequence | Qwen3.5 9B Q4_K_M via Ollama (`qwen3.5:9b`); fallback Qwen3-VL 8B | ~7-8 GB |
 | 8 | Fusion | fused valence, arousal, tension, label, conflicts, irony | rules (later a small trained model) | CPU |
-| 9 | Interpretation | plain-language mood per window, turning points, whole-film emotional arc | Qwen3 8B (text) Q4 via Ollama, reading only the fused timeline | ~5-6 GB |
+| 9 | Interpretation | plain-language mood per window, turning points, whole-film emotional arc | the same Qwen3.5 9B, text only, reading the fused timeline | ~7 GB |
 
 Model choices are starting points; any replacement must fit the same budget.
 Check each model's licence before use (some speech-emotion models are
@@ -79,6 +79,44 @@ Classical signal processing already says a lot about feeling and runs anywhere:
 
 These form the first implementation step so that a feeling timeline exists
 before any extra model is installed.
+
+## Choosing the vision model (Nov 2026)
+
+The earlier process captioned single frames with BLIP (often wrong, even
+inventing movie titles) and passed those captions plus up to three frames per
+12 s window to `gemma3:4b`. Both models are weak for film. Candidates that fit
+12 GB with room for images and context:
+
+| Model | Ollama tag | Size (Q4) | Vision strength (vendor numbers) | Video | Licence | Verdict |
+|---|---|---|---|---|---|---|
+| **Qwen3.5 9B** (Mar 2026) | `qwen3.5:9b` | ~6.6-7.6 GB | MMMU 78.4, RealWorldQA 80.3, MMStar 79.7, Video-MME 84.5 | native | Apache 2.0 | **Recommended default** |
+| Qwen3-VL 8B (Oct 2025) | `qwen3-vl:8b` | ~6.2 GB | strong OCR/docs, MathVista ~86 | yes, timestamps | Apache 2.0 | Fallback; already supported by the shot reviewer |
+| Gemma 4 E4B / 12B | `gemma4:e4b` (12B: verify tag) | ~6.6 / ~8 GB | MMMU-Pro 52.6 for E4B | frames | Apache 2.0 | Worth one comparison run: also accepts audio |
+| Gemma 3 12B | `gemma3:12b` | ~6.6 GB | MMMU 59.6 | frames | Gemma terms | Older; weaker |
+| Phi-4-reasoning-vision 15B | llama.cpp only | ~9-10 GB | MMMU 54.3 | no | MIT | Tight fit, not in Ollama |
+| Qwen 3.6 27B, Gemma 4 26B/31B, Qwen3-VL 32B | | 17-21 GB | better | | | Do **not** fit 12 GB without slow offload |
+
+Choice: **Qwen3.5 9B at Q4_K_M** for stage 7, and the same model text-only for
+stage 9, so only one large model needs downloading. Q5_K_M (~8 GB) is worth a
+try if quality is borderline; Q8 (~10 GB) leaves too little room for 6-8 frames
+of context on 12 GB. None of the cited benchmarks measure film mood or facial
+emotion, so the final choice is made by the stage 6 evaluation clips: run
+Qwen3.5 9B, Qwen3-VL 8B and Gemma 4 on the same windows and compare against
+hand annotations.
+
+Process changes over the earlier version:
+
+- Drop BLIP captions from the context prompt; the VLM sees the frames directly.
+- Send a short **sequence** of 6-8 frames per 5 s window (about 1.5 fps,
+  448-672 px) so motion and expression changes are visible, instead of three
+  isolated stills per 12 s.
+- Ask for fixed feeling fields (lighting, colour mood, faces and expressions,
+  body language, action intensity, visual valence/arousal with confidence), not
+  free summaries.
+- Give the model the measured signals for the window (brightness, motion,
+  loudness, music mode) as context, labelled as measurements.
+- Unload the model after the stage (`keep_alive: 0`) so later GPU stages get
+  the full 12 GB.
 
 ## Fusion rules (first version)
 
