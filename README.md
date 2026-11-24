@@ -1,30 +1,40 @@
-# The True Experience  
+# The True Experience
 
-> **Direction (Nov 2026): feeling first.** The next development stage gives the
-> system an emotional reading of the film (music, sound, voice, pacing, look),
-> fused into one timeline, designed to run on a single 12 GB GPU.
-> See [docs/FEELING_PIPELINE.md](docs/FEELING_PIPELINE.md).
->
-> `python -m true_experience.experience` is the general command for any video.
-> The older name `true_experience.local_trailer` still works. Output names
-> default to `<video name>_review.json`; pass `--video-id` (YouTube ID) and
-> `--title` only if you want source links and a title in the report.
+AI that experiences a film the way a viewer does: what is seen, what is heard,
+how lines are spoken, how the music and the editing move, and how all of that
+feels from moment to moment. Everything runs locally on one 12 GB GPU and
+produces a timestamped JSON timeline that a language model can reason over.
 
-## Quick start — virtual environment (recommended)
+## Where the project is now
 
-From the repository root, use **Python 3.11** and an isolated environment. FFmpeg and FFprobe must also be installed and available on your system PATH. The project has a plain `requirements.txt`; **no editable installation (`-e`) is needed** when running via `python -m`.
+Development is **feeling first**: the system builds an emotional timeline of
+the film before it tries to follow the story. The full design is in
+[docs/FEELING_PIPELINE.md](docs/FEELING_PIPELINE.md).
 
-**Linux / macOS:**
+| Layer | Status | Runs on |
+|---|---|---|
+| Shots, silence, 5 s intervals (FFmpeg) | working | CPU |
+| Speech to text (faster-whisper) | working | GPU or CPU |
+| Pacing, brightness, colour, motion, loudness, startles, tempo, key | working | CPU |
+| Visual mood from frame sequences (Qwen3.5 9B through Ollama) | working | GPU, about 7-8 GB |
+| Voice: pitch, rate, loudness, voice groups, voice emotion | working, needs tuning on real dialogue | CPU + small GPU model |
+| Fusion into one emotional timeline (valence, arousal, tension, label, conflicts, irony, turning points) | working, first version | CPU |
+| Separating music, voice and effects (Demucs) | planned | GPU |
+| Music mood and sound events (CLAP, PANNs) | planned | GPU |
+| Scenes, characters, narrative arc | later | |
+| "Talk about the film" interpretation | later | |
 
-```bash
-git clone https://github.com/JanneHonkonen/The-True-Experience.git
-cd The-True-Experience
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m true_experience.experience "/path/to/video.mp4" -o my_video_review.json
-```
+Measured on an RTX 5080 (12 GB) with a 2:29 trailer: about 105 s in total,
+peak VRAM 8.7 GB, roughly 40-45 s of processing per minute of video. Only one
+model is on the GPU at a time and each is unloaded after its stage.
+
+All readings are model and signal **estimates**, not facts about the film.
+
+## Install
+
+You need **Python 3.11**, plus **FFmpeg and FFprobe** on your `PATH`. No
+editable install (`-e`) is needed; everything runs with `python -m` from the
+repository folder.
 
 **Windows PowerShell:**
 
@@ -35,56 +45,119 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m true_experience.experience "C:\Videos\video.mp4" -o my_video_review.json
 ```
 
-If the trailer command fails with `open() got an unexpected keyword argument 'metadata_errors'`, run `python -m pip install -r requirements.txt` again. This project now constrains PyAV below 19 for faster-whisper compatibility. Check with `python -m pip show av` (expected PyAV 18.x or earlier).
+**Linux / macOS:**
 
-### Experimental: time-linked understanding with local visual reasoning
+```bash
+git clone https://github.com/JanneHonkonen/The-True-Experience.git
+cd The-True-Experience
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
 
-For **multiple actual frames per time window, short-term memory, cited
-visual/audio evidence and tentative continuity**, install [Ollama](https://ollama.com/download),
-pull a vision-capable model such as `ollama pull gemma3:4b`, then run:
+For visual mood, install [Ollama](https://ollama.com/download) and pull the
+vision model once:
 
 ```powershell
-python -m true_experience.experience "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 -o iron_man_review.json --context-output iron_man_context_private.json
+ollama pull qwen3.5:9b
 ```
 
-The model reads sampled frame images and fallible ASR, but its narrative output
-remains **unverified hypotheses**, not proven character identity or causality.
-The private context file is **excluded from Git** and may paraphrase dialogue.
-It is never included in the sanitized public report. See
-[rolling context documentation](docs/CONTEXT_REASONING.md).
+The first run also downloads the Whisper and voice-emotion weights.
 
-### Review actual shot frames alongside model evidence
+## Run the feeling timeline
 
-The local trailer command now asks at an interactive terminal whether to
-create a timestamped JPEG archive. Use --thumbnails (or --no-thumbnails)
-to explicitly choose in scripts. The ZIP contains every detected shot's
-midpoint plus the *exact* visual sample for v0001, v0002, etc.
+The full feeling run on a local video:
 
-If the model run is already complete, you can generate images **without**
-running Whisper, BLIP or Gemma again:
+```powershell
+python -m true_experience "C:\Videos\clip.mp4" --voice --whisper-model large-v3-turbo --visual-mood-model qwen3.5:9b -o clip_feeling.json
+```
 
-~~~powershell
-python -m true_experience.shot_archive "C:\winstuff\ai\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
-~~~
+Lighter variants:
 
-See [shot image archive guide](docs/SHOT_THUMBNAILS.md) for manifest links,
-timestamp filenames, and privacy cautions. Movie frames stay local unless
-you choose to share the ZIP, which requires appropriate rights.
+| Command adds | What you get | GPU |
+|---|---|---|
+| `--feeling-signals` | pacing, look and sound signals fused into a timeline | none |
+| `--visual-mood-model qwen3.5:9b` | adds visual mood per interval (implies `--feeling-signals`) | about 7-8 GB |
+| `--voice` | adds transcript, prosody, voice groups and voice emotion (implies `--transcribe` and `--feeling-signals`) | about 3 GB, then freed |
+| `--voice-emotion-model none` | keeps prosody and voice groups, skips the emotion model | |
+| `--visual-mood-frames N` | frames per interval sent to the vision model (1-8, default 6) | |
 
-The first model run downloads Whisper and BLIP weights; allow sufficient disk space and network access. To see available options, run `python -m true_experience.experience --help`. The video remains local. Use only media you're authorized to process; the report contains no source video or full transcript. To exit the environment, use `deactivate`.
+Run `python -m true_experience --help` for every option. The command prints a
+timing line per stage, and the same numbers are saved in
+`metadata.timing_seconds`.
 
-If you see **`'.[all]' is not a valid editable requirement`**, use `python -m pip install -r requirements.txt` instead. `'.[all]'` is a *package extras selector*, not a filename; editable installation depends on being in the correct project directory and on a working build setup. The requirements-file command installs dependencies directly.
+### What the output contains
 
-### Concept Framework for AI to Watch and Understand Film Like a Human
+- `timeline[]`: one entry per 5 s interval, with shots, speech, measured
+  `feeling_signals` and, when the stages ran, `feeling` and `emotion`.
+  - `feeling.pacing`, `.look`, `.visual`, `.voice`, `.music`, `.sound`: one
+    reading per modality, each with valence, arousal, confidence and what it
+    was based on.
+  - `feeling.fused`: the combined valence, arousal, tension, confidence and an
+    emotion label (for example tension, excitement, melancholy, calm, shock),
+    plus `conflicts` where modalities disagree and `possible_irony` (bright
+    music over a dark scene).
+- `speech_segments[]`: transcript lines with `voice` details and a `speaker`
+  voice group (S1, S2 ...).
+- `feeling_curve`: valence, arousal, tension and label over time, the film's
+  baselines and its turning points.
 
-## Introduction
+Stage guides: [feeling signals](docs/FEELING_SIGNALS.md),
+[visual mood](docs/VISUAL_MOOD.md), [voice](docs/VOICE.md).
+
+## Other tools in the repository
+
+These come from the earlier evidence-first work and still work.
+
+- **Review report with rolling context**
+  (`python -m true_experience.experience video.mp4 --context-model gemma3:4b`):
+  a shareable review JSON without the transcript, plus a private file where a
+  vision model reads frames in 12 s windows with short-term memory and cites
+  its evidence. Output names default to `<video name>_review.json`; add
+  `--title` and `--video-id` (YouTube) only if you want them in the report.
+  See [docs/CONTEXT_REASONING.md](docs/CONTEXT_REASONING.md).
+- **Shot image archive** (`python -m true_experience.shot_archive`): a ZIP of
+  timestamped JPEGs for every shot, to check model claims against the real
+  frames. See [docs/SHOT_THUMBNAILS.md](docs/SHOT_THUMBNAILS.md).
+- **Per-shot vision review** (`python -m true_experience.vision_review shots.zip`):
+  detailed descriptions of the archived shots with a local Ollama model, or
+  the OpenAI API only with explicit `--confirm-upload`. See
+  [docs/VISION_REVIEW_BACKENDS.md](docs/VISION_REVIEW_BACKENDS.md).
+- **Evaluation helpers**: see [docs/EVALUATION.md](docs/EVALUATION.md).
+
+The older BLIP frame captions (`--caption-frames`) are still available but are
+being replaced by the visual mood stage.
+
+## Privacy and rights
+
+Videos stay on your computer. The local Ollama and Hugging Face models do not
+upload anything; only the optional OpenAI review backend sends frames, and only
+after you confirm. Files ending in `_private.json` can contain dialogue and are
+excluded from Git. Use only media you are allowed to process.
+
+## Troubleshooting
+
+- **"Speech recognition requires ..."**: the message names the real import
+  error and the Python that ran. Activate the `.venv` and run
+  `python -m pip install -r requirements.txt` again.
+- **`open() got an unexpected keyword argument 'metadata_errors'`**: PyAV is
+  too new for faster-whisper. Reinstalling from `requirements.txt` pins it
+  below 19 (`python -m pip show av` should say 18.x or earlier).
+- **`'.[all]' is not a valid editable requirement`**: install with
+  `python -m pip install -r requirements.txt` instead.
+- **Visual mood fails to connect**: start Ollama and check that
+  `ollama list` shows `qwen3.5:9b`.
+
+## The concept: AI that watches film like a human
+
+### Introduction
 Cinema is one of humanity’s richest forms of storytelling. A film is not a mere sequence of images and sounds; it is a carefully constructed emotional and narrative experience. Humans perceive it as a living timeline of moods, rhythms, intentions, and feelings.  Traditional AI systems do not “watch” films. They parse subtitles, detect objects, or classify scenes in isolation. These approaches miss the evolving emotional structure that makes cinema meaningful. The True Experience is a conceptual and technical framework designed to close this gap.  
 Its goal is to enable AI systems to perceive and interpret video content in a way that more closely mirrors human film comprehension - through synchronized analysis of visuals, sound, rhythm, and emotion over time.
 
-## Core Philosophy
+### Core Philosophy
 Human film experience emerges from the fusion of multiple sensory and emotional layers:
 - Visual storytelling through framing, light, and movement.  
 - Emotional cues in dialogue, music, silence, and ambient sound.  
@@ -93,14 +166,14 @@ Human film experience emerges from the fusion of multiple sensory and emotional 
 
 AI must be able to synthesize these layers dynamically to construct an internal emotional and narrative model of the film - not just detect objects or words.
 
-## Concept Goals
+### Concept Goals
 - True multimodal perception. AI should simultaneously process visual, auditory, structural, and emotional signals.
 - Timeline-based emotional mapping. The system must generate evolving emotional states across time, not isolated tags.
 - Narrative structure understanding. Identify key beats: setup, buildup, conflict, climax, resolution.
 - Character, dialogue, and sound comprehension. Not only what is said, but how it is said, where, and what surrounds it.
 - Structured representation for LLMs. Convert film experience into clean, timestamped JSON suitable for reasoning, summarization, and deeper analysis.
 
-## Vision
+### Vision
 Concept defines AI system that can:
 - Generate rich emotional and narrative summaries of any film.  
 - Recognize subtle cinematic techniques, such as ironic music or visual foreshadowing.  
@@ -109,7 +182,7 @@ Concept defines AI system that can:
 
 The True Experience is not a single program but a framework: a structured methodology that developers, researchers, and tool creators can implement to give AI a more human-like grasp of moving images.
 
-## Output Concept
+### Output Concept
 The target output is a detailed, timestamped JSON timeline representing:
 - Visual mood, composition, and scene types  
 - Dialogue content, speaker tone, character presence  
@@ -120,7 +193,7 @@ The target output is a detailed, timestamped JSON timeline representing:
 
 This structured output acts as a bridge between cinematic expression and language models, enabling higher-level reasoning and analysis.
 
-## Potential Applications
+### Potential Applications
 - Film analysis tools: Emotional and structural breakdown for critics or educators.  
 - Filmmaking support: Directors can run emotional audits on their cuts.  
 - Accessibility: Emotion-aware descriptions for visually impaired audiences.  
@@ -150,37 +223,3 @@ B.Eng. Janne Honkonen
 
 ## Closing Note
 AI should not just parse cinema. It should feel it, follow it, and understand it. This concept outlines a path toward that ability - moving from data processing toward genuine emotional and narrative comprehension.
-
-
-## Automated visual review: two modes
-
-Shot detection stays with FFmpeg. The first pass still uses Whisper/BLIP;
-for **more detailed, independent shot-image descriptions**, use the saved
-timestamped ZIP with a stronger vision model. No Codex folder is needed.
-
-**Recommended local test (no API key, runs through Ollama):**
-
-~~~powershell
-ollama pull qwen3-vl:8b
-python -m true_experience.vision_review iron_man_shots.zip --max-shots 12 -o qwen_shot_review.json
-~~~
-
-Try --model qwen3-vl:4b on lower-RAM machines, or --model gemma3:12b
-for another comparison. To process all shots use --max-shots 0; use
---resume to continue interrupted output. Ollama must support Qwen3-VL
-(version 0.12.7+). This model may be slow on CPU.
-
-**Optional OpenAI API** (paid, internet, explicit approval needed):
-
-~~~powershell
-python -m true_experience.vision_review iron_man_shots.zip --backend openai --dry-run
-python -m true_experience.vision_review iron_man_shots.zip --backend openai --max-shots 12 --confirm-upload -o openai_shot_review.json
-~~~
-
-You must set OPENAI_API_KEY securely before a paid run. The ordinary
-local Ollama mode does not upload frames. Both backends produce the
-same structured fields, preserving shot IDs and source timestamps.
-The output is still an *unverified* hypothesis from a still, not
-proof of character identity or narrative continuity. Compare it with
-the previous 12-shot visual review or the actual JPEGs. See
-[vision review options](docs/VISION_REVIEW_BACKENDS.md).

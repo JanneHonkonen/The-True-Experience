@@ -1,6 +1,6 @@
 # The True Experience — evidence-first audiovisual MVP v0.3
 
-Runs on local video with FFmpeg, adding **optional local AI inference**. Captions and transcripts are model hypotheses, not verified facts. Emotion and narrative interpretation remain unimplemented.
+Runs on local video with FFmpeg, adding **optional local AI inference**. Captions and transcripts are model hypotheses, not verified facts. An emotional timeline is available with `--feeling-signals`, `--visual-mood-model` and `--voice` (see the README); narrative interpretation is not implemented yet.
 
 ## Installation: virtual environment (recommended)
 
