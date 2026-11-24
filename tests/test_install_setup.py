@@ -19,6 +19,7 @@ class SetupDocsTests(unittest.TestCase):
             "transformers>=4.45,<5",
             "torch>=2.2",
             "pillow>=10",
+            "numpy>=1.24",
         ])
         self.assertFalse(any(x.startswith(("-e ", "--editable ")) for x in packages))
 
