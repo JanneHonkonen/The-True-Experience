@@ -59,7 +59,7 @@ model-server connection to external computers is supported by the code.
 
 Run an initial test (moderate frame cap):
 
-    python -m true_experience.local_trailer "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 --max-context-images 3 -o iron_man_review.json --context-output iron_man_context_private.json
+    python -m true_experience.experience "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 --max-context-images 3 -o iron_man_review.json --context-output iron_man_context_private.json
 
 To keep an expensive Whisper/BLIP run after a context failure, the program
 now saves **iron_man_analysis_private.json** automatically when `--context-model`
@@ -72,7 +72,7 @@ For denser visual evidence, increase --max-caption-frames to 120 and reduce
 --caption-spacing if your hardware can handle it. Larger Whisper models
 can improve ASR but are not guaranteed accurate. To check flags:
 
-    python -m true_experience.local_trailer --help
+    python -m true_experience.experience --help
 
 The default mode (no --context-model) does **not** require Ollama or
 generate any private context file. There is no added Python dependency

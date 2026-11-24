@@ -1,5 +1,15 @@
 # The True Experience  
 
+> **Direction (Nov 2026): feeling first.** The next development stage gives the
+> system an emotional reading of the film (music, sound, voice, pacing, look),
+> fused into one timeline, designed to run on a single 12 GB GPU.
+> See [docs/FEELING_PIPELINE.md](docs/FEELING_PIPELINE.md).
+>
+> `python -m true_experience.experience` is the general command for any video.
+> The older name `true_experience.local_trailer` still works. Output names
+> default to `<video name>_review.json`; pass `--video-id` (YouTube ID) and
+> `--title` only if you want source links and a title in the report.
+
 ## Quick start — virtual environment (recommended)
 
 From the repository root, use **Python 3.11** and an isolated environment. FFmpeg and FFprobe must also be installed and available on your system PATH. The project has a plain `requirements.txt`; **no editable installation (`-e`) is needed** when running via `python -m`.
@@ -13,7 +23,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m true_experience.local_trailer "/path/to/iron-man-trailer.mp4" -o iron_man_review.json
+python -m true_experience.experience "/path/to/video.mp4" -o my_video_review.json
 ```
 
 **Windows PowerShell:**
@@ -25,7 +35,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m true_experience.local_trailer "C:\Videos\iron-man-trailer.mp4" -o iron_man_review.json
+python -m true_experience.experience "C:\Videos\video.mp4" -o my_video_review.json
 ```
 
 If the trailer command fails with `open() got an unexpected keyword argument 'metadata_errors'`, run `python -m pip install -r requirements.txt` again. This project now constrains PyAV below 19 for faster-whisper compatibility. Check with `python -m pip show av` (expected PyAV 18.x or earlier).
@@ -37,7 +47,7 @@ visual/audio evidence and tentative continuity**, install [Ollama](https://ollam
 pull a vision-capable model such as `ollama pull gemma3:4b`, then run:
 
 ```powershell
-python -m true_experience.local_trailer "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 -o iron_man_review.json --context-output iron_man_context_private.json
+python -m true_experience.experience "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 -o iron_man_review.json --context-output iron_man_context_private.json
 ```
 
 The model reads sampled frame images and fallible ASR, but its narrative output
@@ -64,7 +74,7 @@ See [shot image archive guide](docs/SHOT_THUMBNAILS.md) for manifest links,
 timestamp filenames, and privacy cautions. Movie frames stay local unless
 you choose to share the ZIP, which requires appropriate rights.
 
-The first model run downloads Whisper and BLIP weights; allow sufficient disk space and network access. To see available options, run `python -m true_experience.local_trailer --help`. The video remains local. Use only media you're authorized to process; the report contains no source video or full transcript. To exit the environment, use `deactivate`.
+The first model run downloads Whisper and BLIP weights; allow sufficient disk space and network access. To see available options, run `python -m true_experience.experience --help`. The video remains local. Use only media you're authorized to process; the report contains no source video or full transcript. To exit the environment, use `deactivate`.
 
 If you see **`'.[all]' is not a valid editable requirement`**, use `python -m pip install -r requirements.txt` instead. `'.[all]'` is a *package extras selector*, not a filename; editable installation depends on being in the correct project directory and on a working build setup. The requirements-file command installs dependencies directly.
 

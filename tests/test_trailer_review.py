@@ -51,3 +51,20 @@ class ReportTests(unittest.TestCase):
         report=make_review(fixture(),"8ugaeA-nMTc",max_captions=1)
         self.assertEqual(report["visual"]["total_captions"],2)
         self.assertEqual(report["visual"]["caption_examples_in_report"],1)
+
+
+class GeneralSourceTests(unittest.TestCase):
+    def test_no_hardcoded_title_or_links_without_video_id(self):
+        import json
+        report=make_review(fixture())
+        self.assertIsNone(report["source"]["youtube_video_id"])
+        self.assertIsNone(report["source"]["url"])
+        self.assertIsNone(report["source"]["source_title"])
+        self.assertIsNone(report["visual"]["caption_hypotheses"][0]["view_source_at_time"])
+        self.assertNotIn("Iron Man",json.dumps(report))
+
+    def test_user_supplied_title(self):
+        report=make_review(fixture(),source_title="  My holiday film ")
+        self.assertEqual(report["source"]["source_title"],"My holiday film")
+        with self.assertRaises(ValueError):
+            make_review(fixture(),source_title="x"*301)
