@@ -153,31 +153,47 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
     for name in ("ffmpeg","ffprobe"):
         if not shutil.which(name):
             raise RuntimeError(f"{name} is required on PATH")
+    import time
+    timing={}
+    clock=[time.perf_counter()]
+    def lap(name):
+        now=time.perf_counter()
+        timing[name]=round(now-clock[0],2)
+        clock[0]=now
+    started=clock[0]
     info=probe(path)
     duration=info["duration_seconds"]
     cuts=detect_cuts(path,duration,scene_threshold)
     silences=detect_silences(path,duration,silence_db,silence_min_duration) if info["has_audio"] else []
     subtitles=load_srt(subtitles_path) if subtitles_path else []
     shots=create_shots(cuts,duration)
+    lap("probe_cuts_silence")
     if transcribe and not info["has_audio"]:
         raise ValueError("Cannot transcribe: no audio stream in video")
     speech=transcribe_audio(path,duration,model_name=whisper_model,language=language) if transcribe else []
+    if transcribe: lap("speech")
     visuals=caption_shots(path,shots,model_name=caption_model,max_frames=max_caption_frames,sample_spacing=caption_spacing) if caption_frames else []
+    if caption_frames: lap("frame_captions")
     timeline=build_timeline(duration,interval,shots,silences,info["has_audio"],subtitles)
     align_observations(timeline,speech,visuals)
     signal_settings=None
     if feeling_signals:
         from .signals import compute_signals
         signal_settings=compute_signals(path,info,shots,timeline)
+        lap("feeling_signals")
     visual_mood_settings=None
     if feeling_signals and visual_mood_model:
         from .visual_mood import analyze_visual_mood
         visual_mood_settings=analyze_visual_mood(path,timeline,model=visual_mood_model,
                                                  frames_per_window=visual_mood_frames)
+        lap("visual_mood")
     feeling_curve=None
     if feeling_signals:
         from .fusion import fuse_timeline
         feeling_curve=fuse_timeline(timeline)
+        lap("fusion")
+    timing["total"]=round(time.perf_counter()-started,2)
+    timing["seconds_per_video_minute"]=round(timing["total"]/(duration/60),2)
     return {"schema_version":"0.3.0","metadata":{
         "source_file":path.name,**info,"interval_seconds":interval,
         "scene_change_threshold":scene_threshold,"silence_threshold_db":silence_db,
@@ -191,6 +207,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                    (["ollama_visual_mood"] if visual_mood_settings else [])),
         "feeling_signals":signal_settings,
         "visual_mood":visual_mood_settings,
+        "timing_seconds":timing,
         "perception":{"speech_enabled":transcribe,
                       "speech_model":whisper_model if transcribe else None,
                       "captioning_enabled":caption_frames,

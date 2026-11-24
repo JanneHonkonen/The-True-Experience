@@ -15,11 +15,12 @@ import base64
 import io
 import json
 import math
+import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 
-from .perception import _extract_image
 
 OLLAMA_CHAT = "http://127.0.0.1:11434/api/chat"
 OLLAMA_GENERATE = "http://127.0.0.1:11434/api/generate"
@@ -91,6 +92,26 @@ def _jpeg(image):
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG", quality=85)
     return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def extract_window_jpegs(video, start, end, count, width=FRAME_WIDTH):
+    """Decode ``count`` frames at the bin centres of [start, end) with ONE FFmpeg call.
+
+    Returns base64 JPEG strings. Much faster than one seek per frame.
+    """
+    step = (end - start) / count
+    cmd = ["ffmpeg", "-hide_banner", "-nostdin", "-v", "error",
+           "-ss", f"{start + step / 2:.6f}", "-i", str(video), "-map", "0:v:0",
+           "-vf", f"fps={1 / step:.6f},scale={width}:-2", "-frames:v", str(count),
+           "-q:v", "3", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"]
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode:
+        raise RuntimeError("Frame extraction failed at "
+                           f"{start:.2f}s: {result.stderr.decode('utf-8', 'replace')[-300:]}")
+    images = [chunk + b"\xff\xd9" for chunk in result.stdout.split(b"\xff\xd9") if chunk.startswith(b"\xff\xd8")]
+    if not images:
+        raise RuntimeError(f"No frames decoded at {start:.2f}s")
+    return [base64.b64encode(img).decode("ascii") for img in images[:count]]
 
 
 def _measured(signals):
@@ -182,14 +203,20 @@ def analyze_visual_mood(video, timeline, *, model=DEFAULT_MODEL, frames_per_wind
             or not 1 <= frames_per_window <= 8:
         raise ValueError("frames per window must be between 1 and 8")
     backend = backend or ollama_chat
-    frame_loader = frame_loader or _extract_image
     unload = unload or unload_model
     abstained = 0
+    frame_seconds = model_seconds = 0.0
     try:
         for index, window in enumerate(timeline):
             times = frame_times(window["start_seconds"], window["end_seconds"], frames_per_window)
             signals = window.setdefault("feeling_signals", {})
-            images = [_jpeg(frame_loader(video, t)) for t in times]
+            began = time.perf_counter()
+            if frame_loader is None:
+                images = extract_window_jpegs(video, window["start_seconds"],
+                                              window["end_seconds"], frames_per_window)
+            else:
+                images = [_jpeg(frame_loader(video, t)) for t in times]
+            frame_seconds += time.perf_counter() - began
             payload = {"model": model, "stream": False, "think": False, "format": SCHEMA,
                        "keep_alive": "10m", "options": {"temperature": 0, "num_ctx": 8192},
                        "messages": [
@@ -199,6 +226,7 @@ def analyze_visual_mood(video, timeline, *, model=DEFAULT_MODEL, frames_per_wind
                                "frame_times_seconds": times,
                                "measured_signals": _measured(signals)})}]}
             result = None
+            began = time.perf_counter()
             for attempt in range(2):
                 try:
                     result = validate(backend(payload, timeout))
@@ -208,6 +236,7 @@ def analyze_visual_mood(video, timeline, *, model=DEFAULT_MODEL, frames_per_wind
                     payload["messages"] = payload["messages"][:2] + [
                         {"role": "user", "content": f"Invalid answer ({error}). Return JSON "
                                                     "matching the schema exactly."}]
+            model_seconds += time.perf_counter() - began
             if result is None:
                 abstained += 1
                 print(f"WARNING: visual mood abstained at {window['start_seconds']:.1f}s ({error})",
@@ -221,4 +250,6 @@ def analyze_visual_mood(video, timeline, *, model=DEFAULT_MODEL, frames_per_wind
     finally:
         unload(model)
     return {"model": model, "frames_per_window": frames_per_window,
-            "frame_width": FRAME_WIDTH, "abstained_windows": abstained}
+            "frame_width": FRAME_WIDTH, "abstained_windows": abstained,
+            "frame_extraction_seconds": round(frame_seconds, 2),
+            "model_seconds": round(model_seconds, 2)}

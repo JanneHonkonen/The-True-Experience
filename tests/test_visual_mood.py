@@ -126,3 +126,29 @@ class VisualMoodTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WindowExtractionTests(unittest.TestCase):
+    def test_one_ffmpeg_call_gives_all_frames_in_order(self):
+        import shutil, subprocess, tempfile
+        from pathlib import Path
+        if not shutil.which("ffmpeg"):
+            self.skipTest("FFmpeg missing")
+        with tempfile.TemporaryDirectory() as td:
+            video = Path(td) / "v.mp4"
+            # Brightness ramps up over 5 s so frame order is checkable.
+            subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
+                            "-i", "color=c=black:s=640x360:r=25:d=5",
+                            "-vf", "format=yuv420p,geq=lum=T*50:cb=128:cr=128",
+                            "-c:v", "mpeg4", str(video)], check=True)
+            jpegs = vm.extract_window_jpegs(video, 0.0, 5.0, 6)
+            self.assertEqual(len(jpegs), 6)
+            raw = [base64.b64decode(j) for j in jpegs]
+            self.assertTrue(all(r.startswith(b"\xff\xd8") and r.endswith(b"\xff\xd9") for r in raw))
+            if Image is not None:
+                import io
+                imgs = [Image.open(io.BytesIO(r)).convert("L") for r in raw]
+                self.assertEqual(imgs[0].width, 512)
+                means = [sum(i.getdata()) / (i.width * i.height) for i in imgs]
+                self.assertEqual(means, sorted(means))
+                self.assertGreater(means[-1] - means[0], 100)
