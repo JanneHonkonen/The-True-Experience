@@ -29,7 +29,7 @@ def main(argv=None):
     p.add_argument("--max-caption-frames",type=int,default=120,help="Maximum sampled frames to caption")
     p.add_argument("--caption-spacing",type=positive,default=10.,help="Target maximum seconds per sample in each shot (budget permitting)")
     p.add_argument("--feeling-signals",action="store_true",
-                   help="Measure pacing, look, loudness, tempo and key per interval (CPU, needs NumPy)")
+                   help="Measure pacing, look, loudness, tempo and key per interval and fuse them into an emotional timeline (CPU, needs NumPy)")
     a = p.parse_args(argv)
     try:
         result = analyze(a.video,interval=a.interval,scene_threshold=a.scene_threshold,
