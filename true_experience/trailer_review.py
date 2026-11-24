@@ -10,9 +10,24 @@ from .evaluation import validate_report
 VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
-def make_review(report: dict, video_id: str, *, max_captions: int = 60) -> dict:
-    if not isinstance(video_id, str) or not VIDEO_ID.fullmatch(video_id):
+def _youtube_link(video_id: str | None, seconds: float | None = None) -> str | None:
+    if video_id is None:
+        return None
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    return url if seconds is None else f"{url}&t={int(seconds)}s"
+
+
+def make_review(report: dict, video_id: str | None = None, *, max_captions: int = 60,
+                source_title: str | None = None) -> dict:
+    """Build a shareable summary of an analysis report.
+
+    ``video_id`` (an 11-character YouTube ID) and ``source_title`` are optional
+    identification aids supplied by the user; nothing about the source is assumed.
+    """
+    if video_id is not None and (not isinstance(video_id, str) or not VIDEO_ID.fullmatch(video_id)):
         raise ValueError("Invalid YouTube video ID")
+    if source_title is not None and (not isinstance(source_title, str) or len(source_title) > 300):
+        raise ValueError("source_title must be a string of at most 300 characters")
     if isinstance(max_captions, bool) or not isinstance(max_captions, int) or max_captions < 1:
         raise ValueError("max_captions must be a positive integer")
     validation = validate_report(report)
@@ -32,7 +47,7 @@ def make_review(report: dict, video_id: str, *, max_captions: int = 60) -> dict:
             "shot_id": obs["shot_id"],
             "caption_hypothesis": obs["description"],
             "model": obs.get("model"),
-            "view_source_at_time": f"https://www.youtube.com/watch?v={video_id}&t={int(t)}s",
+            "view_source_at_time": _youtube_link(video_id, t),
             "human_groundedness_review": "not_reviewed",
         })
     spoken_duration = sum(max(0.0, float(s["end_seconds"])-float(s["start_seconds"])) for s in speech)
@@ -42,8 +57,8 @@ def make_review(report: dict, video_id: str, *, max_captions: int = 60) -> dict:
         "evaluation_type": "unannotated_real_video",
         "source": {
             "youtube_video_id": video_id,
-            "url": f"https://www.youtube.com/watch?v={video_id}",
-            "source_title": "Iron Man (2008) Trailer #1 | Movieclips Classic Trailers",
+            "url": _youtube_link(video_id),
+            "source_title": source_title.strip() if source_title else None,
             "original_video_included": False,
             "raw_transcript_included": False,
             "frames_included": False,
@@ -90,13 +105,15 @@ def make_review(report: dict, video_id: str, *, max_captions: int = 60) -> dict:
 def main(argv=None) -> int:
     p=argparse.ArgumentParser(description="Create source-linked sanitized review report")
     p.add_argument("analysis",type=Path)
-    p.add_argument("--video-id",required=True)
+    p.add_argument("--video-id",help="Optional YouTube video ID for timestamped review links")
+    p.add_argument("--title",help="Optional human-readable source title")
     p.add_argument("--max-captions",type=int,default=60)
     p.add_argument("-o","--output",type=Path,required=True)
     args=p.parse_args(argv)
     try:
         data=json.loads(args.analysis.read_text(encoding="utf-8"))
-        result=make_review(data,args.video_id,max_captions=args.max_captions)
+        result=make_review(data,args.video_id,max_captions=args.max_captions,
+                           source_title=args.title)
         args.output.parent.mkdir(parents=True,exist_ok=True)
         args.output.write_text(json.dumps(result,ensure_ascii=False,indent=2,allow_nan=False)+"\n",encoding="utf-8")
         print(f"Sanitized report: {result['structure']['shots_detected']} shots, "

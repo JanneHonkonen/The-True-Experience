@@ -40,3 +40,26 @@ class LocalEvalTests(unittest.TestCase):
     def test_missing_video_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             self.assertEqual(main([str(Path(td)/"missing.mp4")]),1)
+
+
+class DefaultPathTests(unittest.TestCase):
+    def test_paths_follow_video_name(self):
+        from true_experience.local_trailer import default_paths
+        paths=default_paths(Path("films/holiday.mp4"),None)
+        self.assertEqual(paths["output"],Path("films/holiday_review.json"))
+        self.assertEqual(paths["context_output"],Path("films/holiday_context_private.json"))
+        self.assertEqual(paths["analysis_cache"],Path("films/holiday_analysis_private.json"))
+
+    def test_existing_review_names_keep_old_cache_names(self):
+        from true_experience.local_trailer import default_paths
+        paths=default_paths(Path("x.mp4"),Path("iron_man_review.json"))
+        self.assertEqual(paths["analysis_cache"],Path("iron_man_analysis_private.json"))
+        self.assertEqual(paths["context_output"],Path("iron_man_context_private.json"))
+
+    def test_experience_entry_point_help(self):
+        import subprocess, sys
+        root=Path(__file__).resolve().parents[1]
+        result=subprocess.run([sys.executable,"-m","true_experience.experience","--help"],
+                              cwd=root,capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn("--title",result.stdout)
