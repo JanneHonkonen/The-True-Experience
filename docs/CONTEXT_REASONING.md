@@ -59,7 +59,7 @@ model-server connection to external computers is supported by the code.
 
 Run an initial test (moderate frame cap):
 
-    python -m true_experience.experience "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 --max-context-images 3 -o iron_man_review.json --context-output iron_man_context_private.json
+    python -m true_experience.experience "C:\Videos\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 --max-context-images 3 -o iron_man_review.json --context-output iron_man_context_private.json
 
 To keep an expensive Whisper/BLIP run after a context failure, the program
 now saves **iron_man_analysis_private.json** automatically when `--context-model`
@@ -87,7 +87,7 @@ evidence ID v0001 etc. You can generate it from your PRIVATE analysis
 cache without rerunning the models:
 
 ~~~powershell
-python -m true_experience.shot_archive "C:\winstuff\ai\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
+python -m true_experience.shot_archive "C:\Videos\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
 ~~~
 
 The manifest maps exact times, shots, evidence IDs and model context

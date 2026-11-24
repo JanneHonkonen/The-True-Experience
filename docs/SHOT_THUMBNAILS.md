@@ -23,7 +23,7 @@ In the activated Windows venv, from the repository root, run:
 
 ~~~powershell
 git pull
-python -m true_experience.shot_archive "C:\winstuff\ai\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
+python -m true_experience.shot_archive "C:\Videos\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
 ~~~
 
 This loads the existing private analysis and context files and decodes
