@@ -47,7 +47,7 @@ visual/audio evidence and tentative continuity**, install [Ollama](https://ollam
 pull a vision-capable model such as `ollama pull gemma3:4b`, then run:
 
 ```powershell
-python -m true_experience.experience "C:\winstuff\ai\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 -o iron_man_review.json --context-output iron_man_context_private.json
+python -m true_experience.experience "C:\Videos\iron_man_trailer.mp4" --whisper-model small --max-caption-frames 60 --caption-spacing 4 --context-model gemma3:4b --context-window 12 -o iron_man_review.json --context-output iron_man_context_private.json
 ```
 
 The model reads sampled frame images and fallible ASR, but its narrative output
@@ -67,7 +67,7 @@ If the model run is already complete, you can generate images **without**
 running Whisper, BLIP or Gemma again:
 
 ~~~powershell
-python -m true_experience.shot_archive "C:\winstuff\ai\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
+python -m true_experience.shot_archive "C:\Videos\iron_man_trailer.mp4" --analysis iron_man_analysis_private.json --context iron_man_context_private.json -o iron_man_shots.zip
 ~~~
 
 See [shot image archive guide](docs/SHOT_THUMBNAILS.md) for manifest links,
