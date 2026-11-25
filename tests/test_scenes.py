@@ -114,6 +114,10 @@ class StoryTests(unittest.TestCase):
         self.assertEqual(story["character_links"][0]["ids"], ["C6", "C1"])
         self.assertEqual(story["kind"], "interpretation")
         self.assertEqual(unloaded, ["qwen3.5:9b"])
+        arc_cast = json.loads(sent[2]["messages"][1]["content"])["characters"]
+        self.assertEqual(arc_cast[0]["name"], None)
+        self.assertEqual(meta["naming"]["named"], 0)
+        self.assertEqual(story["names_not_on_screen"], [])
 
     def test_invalid_scene_answer_abstains(self):
         from true_experience.story import interpret_story

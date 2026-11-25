@@ -25,6 +25,7 @@ the film before it tries to follow the story. The full design is in
 | Character roles: main character, hero, villain, journalist, business person ... | working, first version | GPU (same vision model) |
 | Scenes: shots grouped by look, people, dialogue and silence | working, first version | CPU |
 | Story: scene readings, story beats, whole-film arc and turning points | working, first version | GPU (same vision model) |
+| Character names from dialogue and on-screen text, one-line profile per character | working, first version | CPU (uses the scene readings) |
 | "Talk about the film" interpretation | later | |
 
 Measured on an RTX 5080 (12 GB) with a 2:29 trailer: about 105 s in total,
@@ -114,12 +115,18 @@ timing line per stage, and the same numbers are saved in
   voice group (S1, S2 ...).
 - `characters[]`: each character `C1`, `C2` ... with their face IDs, outfit IDs
   and colours, screen time, voice groups, prominence, `main_character` and,
-  with `--character-roles`, their `role`. `character_tracks[]` lists every
-  appearance, and each interval has `characters_present`.
+  with `--character-roles`, their `role` and apparent look. `name` holds the
+  name heard in the film (with `--story`, or from self-introductions in the
+  transcript), and `profile` is one readable line such as *Man named Tony
+  Stark ("Mr. Stark"); appears to be in his 40s; slim, athletic; short dark
+  hair; Van Dyke beard; protagonist (hero, business person).*
+  `character_tracks[]` lists every appearance, and each interval has
+  `characters_present`.
 - `scenes[]`: scenes with their shots, characters, feeling and, with
   `--story`, a `reading` (summary, place, scene type, story beat, emotional
   turn). `story`: logline, arc, turning points, protagonist and antagonist,
-  emotional journey and character-link hypotheses.
+  emotional journey, character-link hypotheses and names mentioned for people
+  who never appear.
 - `feeling_curve`: valence, arousal, tension and label over time, the film's
   baselines and its turning points.
 
@@ -153,8 +160,10 @@ being replaced by the visual mood stage.
 ## Privacy and rights
 
 Videos stay on your computer. The local Ollama and Hugging Face models do not
-upload anything. Characters are grouped within one video only: nobody is
-named or looked up, and face data is never written to the output. Only the
+upload anything. Characters are grouped within one video only and are never
+looked up: a character's name comes only from what is said or shown in the
+film, never from recognising an actor, and face data is never written to the
+output. Physical descriptions leave out ethnicity and judgements of looks. Only the
 optional OpenAI review backend sends frames, and only after you confirm. Files ending in `_private.json` can contain dialogue and are
 excluded from Git. Use only media you are allowed to process.
 

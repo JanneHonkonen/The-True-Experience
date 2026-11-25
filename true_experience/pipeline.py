@@ -239,6 +239,13 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             character_result["characters"] if character_result else [],feeling_curve,
             model=story_model)
         lap("story")
+    naming_settings=story_settings.pop("naming",None) if story_settings else None
+    if character_result:
+        from .naming import add_profiles,name_characters
+        if naming_settings is None:
+            # No story pass: names from self-introductions in the transcript only.
+            _,naming_settings=name_characters(character_result["characters"],speech)
+        add_profiles(character_result["characters"])
     timing["total"]=round(time.perf_counter()-started,2)
     timing["seconds_per_video_minute"]=round(timing["total"]/(duration/60),2)
     return {"schema_version":"0.3.0","metadata":{
@@ -266,6 +273,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         "character_roles":character_roles,
         "scenes":scene_settings,
         "story":story_settings,
+        "naming":naming_settings,
         "timing_seconds":timing,
         "perception":{"speech_enabled":transcribe,
                       "speech_model":whisper_model if transcribe else None,
@@ -286,7 +294,9 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                         "Fused feeling (valence, arousal, tension, emotion label) is a heuristic estimate "
                         "from measured signals, not yet validated against human ratings."]
                        if feeling_signals else [])+
-                      (["Characters are grouped within this video only; nobody is named or identified.",
+                      (["Characters are grouped within this video only. Names come only from the film's "
+                        "dialogue and on-screen text, never from face recognition of actors.",
+                        "Physical descriptions are apparent (as seen on screen) and may be wrong.",
                         "Face and clothing grouping can split one person or merge look-alikes "
                         "(same uniform, profile faces, dark scenes).",
                         "Character roles are model judgements of the fictional role from visible cues "

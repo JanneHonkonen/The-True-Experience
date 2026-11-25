@@ -11,6 +11,10 @@ The model judges the *fictional role* from costume, uniform, props, setting,
 actions, framing and dialogue. It is told never to infer a role from
 ethnicity, skin colour, religion, gender or age, never to name actors or real
 people, and to answer "unclear" when the cues are not there.
+
+It also describes the apparent look (gender and age range as they appear,
+build, hair, facial hair, distinctive features) so :mod:`naming` can write a
+profile. Ethnicity, skin colour and attractiveness are not described.
 """
 from __future__ import annotations
 
@@ -27,6 +31,8 @@ ARCHETYPES = ("hero", "villain", "criminal", "terrorist", "victim", "mentor", "l
               "sidekick", "authority_figure", "henchman", "comic_relief", "civilian",
               "journalist", "business_person", "soldier", "law_enforcement", "scientist",
               "unclear")
+GENDERS = ("man", "woman", "boy", "girl", "unclear")
+AGES = ("child", "teen", "20s", "30s", "40s", "50s", "60s", "70+", "unclear")
 
 SCHEMA = {
     "type": "object", "additionalProperties": False,
@@ -39,10 +45,18 @@ SCHEMA = {
                             "items": {"type": "string", "maxLength": 60}},
         "appearance": {"type": "string", "maxLength": 200},
         "evidence": {"type": "string", "maxLength": 300},
+        "apparent_gender": {"type": "string", "enum": list(GENDERS)},
+        "apparent_age_range": {"type": "string", "enum": list(AGES)},
+        "build": {"type": "string", "maxLength": 40},
+        "hair": {"type": "string", "maxLength": 50},
+        "facial_hair": {"type": "string", "maxLength": 50},
+        "distinctive_features": {"type": "array", "maxItems": 3,
+                                 "items": {"type": "string", "maxLength": 50}},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
     },
     "required": ["narrative_role", "archetypes", "occupation", "occupation_cues",
-                 "appearance", "evidence", "confidence"],
+                 "appearance", "evidence", "apparent_gender", "apparent_age_range", "build",
+                 "hair", "facial_hair", "distinctive_features", "confidence"],
 }
 
 SYSTEM_PROMPT = """You help a viewer follow a film. You get images of ONE character from it:
@@ -61,6 +75,13 @@ Rules:
   "pilot") or "unknown"; occupation_cues: the visible or spoken cues behind it.
 - appearance: one sentence on clothing and notable items, at most 25 words.
 - evidence: one sentence of at most 35 words naming the cues behind the role.
+- Physical description, only from what the images show, as a viewer would describe the
+  character to someone who has not seen the film:
+  apparent_gender and apparent_age_range as they appear ("unclear" when the face is hidden,
+  masked or too small); build ("slim", "athletic", "heavyset" ...); hair (length, colour, style);
+  facial_hair ("clean-shaven", "Van Dyke beard", "stubble" ...); distinctive_features: up to 3
+  (glasses, scar, tattoo, eye patch, armour ...). Use "unclear" for anything not visible.
+  Do not describe ethnicity, skin colour or attractiveness.
 - confidence 0..1: lower it when the images are dark, small or ambiguous.
 Answer with JSON matching the schema only."""
 
@@ -86,6 +107,7 @@ def validate(output):
     for key in ("occupation", "appearance", "evidence"):
         if not isinstance(output.get(key), str):
             raise ValueError(f"{key} must be text")
+    physical = validate_physical(output)
     archetypes = list(dict.fromkeys(archetypes))[:3]
     if len(archetypes) > 1 and "unclear" in archetypes:
         archetypes.remove("unclear")
@@ -94,7 +116,24 @@ def validate(output):
             "occupation_cues": [c.strip()[:60] for c in cues[:4]],
             "appearance": output["appearance"].strip()[:200],
             "evidence": output["evidence"].strip()[:300],
+            "physical": physical,
             "confidence": round(_clip(float(conf), 0.0, 1.0), 3)}
+
+
+def validate_physical(output):
+    """Apparent look; missing or malformed parts become "unclear" rather than failing the role."""
+    def word(key, allowed):
+        return output.get(key) if output.get(key) in allowed else "unclear"
+
+    def text(key, limit):
+        value = output.get(key)
+        return value.strip()[:limit] or "unclear" if isinstance(value, str) else "unclear"
+    features = output.get("distinctive_features")
+    return {"apparent_gender": word("apparent_gender", GENDERS),
+            "apparent_age_range": word("apparent_age_range", AGES),
+            "build": text("build", 40), "hair": text("hair", 50), "facial_hair": text("facial_hair", 50),
+            "distinctive_features": [f.strip()[:50] for f in features[:3] if isinstance(f, str) and f.strip()]
+            if isinstance(features, list) else []}
 
 
 # ------------------------------------------------------------- material ----
