@@ -27,6 +27,14 @@ DEFAULT_EMOTION_MODEL = "superb/wav2vec2-base-superb-er"
 DEFAULT_SPEAKER_MODEL = "microsoft/wavlm-base-plus-sv"
 SPEAKER_THRESHOLD = 0.80     # cosine similarity; the model card suggests 0.86 for clean audio
 MIN_SPEAKER_SECONDS = 1.0
+EMOTION_LIFT = 0.15          # how far above the film's typical score a line must be
+
+
+def speech_suspect(seg):
+    """A long segment with very few words is usually Whisper writing text over music."""
+    seconds = seg["end_seconds"] - seg["start_seconds"]
+    words = len(str(seg.get("text", "")).split())
+    return seconds >= 6.0 and words / seconds < 0.6
 
 # Valence/arousal for common speech-emotion labels.
 EMOTION_VA = {
@@ -256,7 +264,8 @@ def relative_emotions(raw):
     rows = [None if r is None else {str(i["label"]).strip().lower(): float(i["score"]) for i in r}
             for r in raw]
     present = [r for r in rows if r]
-    mean = {k: sum(r.get(k, 0.0) for r in present) / len(present) for k in labels}
+    # Median, not mean: one odd line (music, a scream) should not move the baseline.
+    mean = {k: sorted(r.get(k, 0.0) for r in present)[len(present) // 2] for k in labels}
     out = []
     for r in rows:
         if r is None:
@@ -267,13 +276,13 @@ def relative_emotions(raw):
         reading = emotion_reading(positive) if positive else None
         top_raw = max(r.items(), key=lambda kv: kv[1])
         top = max(lift.items(), key=lambda kv: kv[1])
-        if reading is None or top[1] < 0.1:
+        if reading is None or top[1] < EMOTION_LIFT:
             reading = {"label": "neu", "valence": 0.0, "arousal": 0.0}
-        out.append({"label": reading["label"] if top[1] >= 0.1 else "neu",
+        out.append({"label": reading["label"] if top[1] >= EMOTION_LIFT else "neu",
                     "score": _r(r.get(top[0], 0.0)), "lift": _r(top[1]),
                     "valence": reading["valence"], "arousal": reading["arousal"],
                     "model_label": top_raw[0], "model_score": _r(top_raw[1]),
-                    "relative_to": "film_average"})
+                    "relative_to": "film_median"})
     return out
 
 
@@ -367,11 +376,14 @@ def analyze_voice(video, speech, *, emotion_model=DEFAULT_EMOTION_MODEL,
         for seg, samples in zip(segments, loader()):
             info = prosody(samples, seg.get("text", "")) or {}
             scores = None
-            if emotion_backend is not None and len(samples) >= RATE // 2:
+            suspect = speech_suspect(seg)
+            if suspect:
+                seg["speech_suspect"] = "few_words_for_length"
+            if emotion_backend is not None and len(samples) >= RATE // 2 and not suspect:
                 scores = emotion_backend(samples, RATE)
             raw_emotions.append(scores)
             seg["voice"] = {**info, "emotion": None}
-            long_enough = len(samples) >= RATE // 2
+            long_enough = len(samples) >= RATE // 2 and not suspect
             fingerprints.append(voice_fingerprint(samples, pitch_hz=info.get("pitch_median_hz"))
                                 if long_enough else None)
             embeddings.append(speaker_backend(samples, RATE)
@@ -411,7 +423,8 @@ def analyze_voice(video, speech, *, emotion_model=DEFAULT_EMOTION_MODEL,
     print(f"Voice: {len(segments)} segments, {len(groups)} voice groups", file=sys.stderr)
     return {"segments": len(segments), "speakers": len(groups),
             "emotion_model": emotion_model if emotion_backend is not None else None,
-            "emotion_scale": "relative_to_film_average",
+            "emotion_scale": "relative_to_film_median",
+            "suspect_segments": sum(1 for s in segments if s.get("speech_suspect")),
             "speaker_model": speaker_model if speaker_backend is not None else None,
             "speaker_method": method,
             "speaker_threshold": SPEAKER_THRESHOLD if speaker_backend is not None else None}

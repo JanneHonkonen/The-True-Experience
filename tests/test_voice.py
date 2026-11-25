@@ -130,6 +130,15 @@ class AnalyzeVoiceTests(unittest.TestCase):
         self.assertEqual(speech[0]["speaker_source"], "speaker_embedding_cluster")
         self.assertEqual(closed, [True])
 
+    def test_long_segment_with_few_words_is_suspect(self):
+        from true_experience.voice import speech_suspect
+        self.assertTrue(speech_suspect({"start_seconds": 43.0, "end_seconds": 60.6,
+                                        "text": "You have to look tomorrow."}))
+        self.assertFalse(speech_suspect({"start_seconds": 0, "end_seconds": 3,
+                                         "text": "Hi."}))
+        self.assertFalse(speech_suspect({"start_seconds": 0, "end_seconds": 8,
+                                         "text": " ".join(["word"] * 20)}))
+
     def test_relative_emotion_removes_a_constant_lean(self):
         from true_experience.voice import relative_emotions
         raw = [[{"label": "ang", "score": 0.75}, {"label": "sad", "score": 0.15}, {"label": "neu", "score": 0.1}],
