@@ -133,7 +133,8 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             voice=False,voice_emotion_model="superb/wav2vec2-base-superb-er",
             characters=False,character_roles_model=None,character_fps=1.0,
             separate_audio=False,separation_model="htdemucs",
-            voice_speaker_model="microsoft/wavlm-base-plus-sv"):
+            voice_speaker_model="microsoft/wavlm-base-plus-sv",
+            scenes=False,story_model=None):
     path=Path(video_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Video file not found: {path}")
@@ -223,6 +224,21 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         from .fusion import fuse_timeline
         feeling_curve=fuse_timeline(timeline)
         lap("fusion")
+    scene_list=None; scene_settings=None; story=None; story_settings=None
+    if scenes or story_model:
+        from .scenes import detect_scenes
+        scene_list,scene_settings=detect_scenes(
+            path,info,shots,timeline,speech,silences,
+            characters=character_result["characters"] if character_result else None,
+            character_tracks=character_result["character_tracks"] if character_result else None)
+        lap("scenes")
+    if scene_list and story_model:
+        from .story import interpret_story
+        story,story_settings=interpret_story(
+            path,scene_list,timeline,speech,
+            character_result["characters"] if character_result else [],feeling_curve,
+            model=story_model)
+        lap("story")
     timing["total"]=round(time.perf_counter()-started,2)
     timing["seconds_per_video_minute"]=round(timing["total"]/(duration/60),2)
     return {"schema_version":"0.3.0","metadata":{
@@ -239,6 +255,8 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                    (["voice_prosody_and_emotion"] if voice_settings else [])+
                    (["demucs_separation"] if separation else [])+
                    (["character_tracking"] if character_result else [])+
+                   (["scene_grouping"] if scene_list is not None else [])+
+                   (["ollama_story_reading"] if story_settings else [])+
                    (["ollama_character_roles"] if character_roles else [])),
         "feeling_signals":signal_settings,
         "visual_mood":visual_mood_settings,
@@ -246,6 +264,8 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         "separation":separation["settings"] if separation else None,
         "characters":character_result["settings"] if character_result else None,
         "character_roles":character_roles,
+        "scenes":scene_settings,
+        "story":story_settings,
         "timing_seconds":timing,
         "perception":{"speech_enabled":transcribe,
                       "speech_model":whisper_model if transcribe else None,
@@ -275,5 +295,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         "silence_intervals":[{"start_seconds":a,"end_seconds":b} for a,b in silences],
         "speech_segments":speech,"visual_observations":visuals,"timeline":timeline,
         **({"feeling_curve":feeling_curve} if feeling_curve is not None else {}),
+        **({"scenes":scene_list} if scene_list is not None else {}),
+        **({"story":story} if story_settings else {}),
         **({"characters":character_result["characters"],
             "character_tracks":character_result["character_tracks"]} if character_result else {})}
