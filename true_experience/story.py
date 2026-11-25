@@ -14,6 +14,9 @@ Two passes with the same Ollama model used for visual mood (default
    characters the face and clothing stages could not (for example a masked
    figure who is probably the lead in a suit).
 
+Between the two passes, :mod:`naming` turns the names heard in each scene
+into a ``name`` per character, so the arc can use them.
+
 Everything the model says is labelled as interpretation; nothing overwrites
 the measured data.
 """
@@ -21,6 +24,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sys
 import time
 
@@ -31,6 +35,8 @@ SCENE_TYPES = ("dialogue", "action", "fight", "chase", "montage", "establishing"
 BEATS = ("setup", "inciting_incident", "rising_action", "confrontation", "crisis", "climax",
          "falling_action", "resolution", "unclear")
 TIMES = ("day", "night", "dusk_dawn", "interior_unknown", "unclear")
+NAME_CUES = ("self_introduction", "addressed", "mentioned_present", "mentioned_absent", "on_screen_text")
+REFERS = ("absent", "unknown")
 
 SCENE_SCHEMA = {
     "type": "object", "additionalProperties": False,
@@ -46,10 +52,16 @@ SCENE_SCHEMA = {
             "properties": {"id": {"type": "string", "maxLength": 8},
                            "doing": {"type": "string", "maxLength": 100}},
             "required": ["id", "doing"]}},
+        "name_mentions": {"type": "array", "maxItems": 6, "items": {
+            "type": "object", "additionalProperties": False,
+            "properties": {"name": {"type": "string", "maxLength": 40},
+                           "refers_to": {"type": "string", "maxLength": 8},
+                           "cue": {"type": "string", "enum": list(NAME_CUES)}},
+            "required": ["name", "refers_to", "cue"]}},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1},
     },
     "required": ["summary", "location", "time_of_day", "scene_type", "story_beat",
-                 "emotional_turn", "character_actions", "confidence"],
+                 "emotional_turn", "character_actions", "name_mentions", "confidence"],
 }
 
 SCENE_PROMPT = """You watch one scene of a film as frames in time order, with facts measured from it.
@@ -62,6 +74,14 @@ Rules:
   changes from the start to the end of the scene, at most 20 words.
 - story_beat: the scene's job in a story; "unclear" when a short clip gives no basis.
 - character_actions: what each listed character does, at most 15 words each.
+- name_mentions: every personal name of a character that is spoken in the given dialogue or
+  shown as on-screen text (caption, name tag, title card). refers_to is whom the name belongs to:
+  the speaker's ID for "I'm X" / "my name is X" (cue self_introduction); the ID of the person
+  spoken to for "X, ..." or "Mr. X" said to someone (addressed); the ID of a person in the scene
+  the line talks about (mentioned_present); "absent" for someone not in the scene
+  (mentioned_absent); the ID or "unknown" for a name shown on screen (on_screen_text).
+  Use "unknown" when you cannot tell whom it belongs to. Write the name as heard ("Mr. Stark").
+  Not company, place or product names, and never actor names. Empty list when no names.
 - confidence 0..1: lower it for dark, very short or ambiguous scenes.
 Answer with JSON matching the schema only."""
 
@@ -104,7 +124,8 @@ Rules:
 - character_links: only when the story strongly suggests that different IDs are the same
   person (for example a masked or suited figure and a character seen building the suit);
   give a confidence. Empty list when there is no such evidence.
-- logline at most 40 words. Never name actors or real people.
+- logline at most 40 words. Characters with a "name" were named in the dialogue; you may use
+  that name next to the ID. Never name actors or real people.
 Answer with JSON matching the schema only."""
 
 
@@ -125,7 +146,33 @@ def _text(output, key, limit):
     return value.strip()[:limit]
 
 
-def validate_scene(output, known_ids=()):
+def _name_heard(name, dialogue):
+    """A name the model reports must appear in the dialogue (any of its words)."""
+    text = dialogue.lower()
+    words = [w.lower().strip(".,'\"") for w in str(name).split()]
+    return any(len(w) > 1 and re.search(rf"\b{re.escape(w)}\b", text) for w in words
+               if w not in ("mr", "mrs", "ms", "dr", "miss", "sir"))
+
+
+def validate_names(mentions, known_ids=(), dialogue=None):
+    if mentions is None:
+        return []
+    if not isinstance(mentions, list) or any(not isinstance(m, dict) for m in mentions):
+        raise ValueError("name_mentions invalid")
+    out = []
+    for m in mentions[:6]:
+        name, who, cue = str(m.get("name", "")).strip()[:40], str(m.get("refers_to", "")), m.get("cue")
+        if not name or cue not in NAME_CUES:
+            continue
+        if who not in REFERS and known_ids and who not in known_ids:
+            who = "unknown"
+        if cue != "on_screen_text" and dialogue is not None and not _name_heard(name, dialogue):
+            continue  # not in the dialogue: the model guessed (or knows the film); drop it
+        out.append({"name": name, "refers_to": who, "cue": cue})
+    return out
+
+
+def validate_scene(output, known_ids=(), dialogue=None):
     if not isinstance(output, dict):
         raise ValueError("response is not an object")
     for key, allowed in (("time_of_day", TIMES), ("scene_type", SCENE_TYPES), ("story_beat", BEATS)):
@@ -141,6 +188,7 @@ def validate_scene(output, known_ids=()):
             "character_actions": [{"id": str(a.get("id", ""))[:8], "doing": str(a.get("doing", ""))[:100]}
                                   for a in actions[:6]
                                   if not known_ids or str(a.get("id", "")) in known_ids],
+            "name_mentions": validate_names(output.get("name_mentions"), known_ids, dialogue),
             "confidence": _number(output.get("confidence"), "confidence")}
 
 
@@ -221,7 +269,9 @@ def read_scenes(video, scenes, timeline, speech, characters, *, model=DEFAULT_MO
                                 {"role": "user", "images": loader(a, b, count),
                                  "content": json.dumps(scene_facts(scene, timeline, speech, characters))}]}
         known = set(scene["characters"])
-        result, error = _ask(backend, payload, lambda o: validate_scene(o, known), timeout)
+        facts = json.loads(payload["messages"][1]["content"])
+        dialogue = " ".join(line.split(": ", 1)[-1] for line in facts["dialogue"])
+        result, error = _ask(backend, payload, lambda o: validate_scene(o, known, dialogue), timeout)
         if result is None:
             abstained += 1
             print(f"WARNING: scene reading abstained for {scene['scene_id']} ({error})", file=sys.stderr)
@@ -240,7 +290,7 @@ def read_arc(scenes, characters, curve, *, model=DEFAULT_MODEL, timeout=300, bac
                         "beat": r.get("story_beat"), "what": " ".join(str(r.get("summary", "")).split()[:30]),
                         "turn": r.get("emotional_turn"),
                         "tension": s["feeling"].get("tension"), "valence": s["feeling"].get("valence")})
-    cast = [{"id": c["id"], "screen_seconds": c["screen_seconds"], "main": c.get("main_character"),
+    cast = [{"id": c["id"], "name": (c.get("name") or {}).get("name"), "screen_seconds": c["screen_seconds"], "main": c.get("main_character"),
              "identified_by": c.get("identified_by"),
              "role": (c.get("role") or {}).get("narrative_role"),
              "archetypes": (c.get("role") or {}).get("archetypes"),
@@ -264,16 +314,20 @@ def read_arc(scenes, characters, curve, *, model=DEFAULT_MODEL, timeout=300, bac
 
 def interpret_story(video, scenes, timeline, speech, characters, curve, *, model=DEFAULT_MODEL,
                     frames_per_scene=6, backend=None, frame_loader=None, unload=None):
-    """Read every scene, then the arc. Returns (story, metadata)."""
+    """Read every scene, name the characters, then read the arc. Returns (story, metadata)."""
+    from .naming import name_characters
     unload = unload or unload_model
     began = time.perf_counter()
     try:
         abstained = read_scenes(video, scenes, timeline, speech, characters, model=model,
                                 frames_per_scene=frames_per_scene, backend=backend,
                                 frame_loader=frame_loader)
+        unseen, naming = name_characters(characters, speech, scenes)
         story = read_arc(scenes, characters, curve, model=model, backend=backend)
     finally:
         unload(model)
-    return story, {"model": model, "scenes_read": len(scenes) - abstained, "abstained": abstained,
+    if story is not None:
+        story["names_not_on_screen"] = unseen
+    return story, {"naming": naming, "model": model, "scenes_read": len(scenes) - abstained, "abstained": abstained,
                    "frames_per_scene": frames_per_scene,
                    "model_seconds": round(time.perf_counter() - began, 2)}

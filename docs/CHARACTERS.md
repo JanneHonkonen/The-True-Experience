@@ -67,12 +67,49 @@ It answers under a fixed schema:
 | `occupation` | short free text such as "business executive" or "news reporter", or "unknown" |
 | `occupation_cues` | the visible or spoken cues behind it |
 | `appearance`, `evidence` | one sentence each |
+| `physical` | apparent look: `apparent_gender` (man, woman, boy, girl, unclear), `apparent_age_range` (child, teen, 20s ... 60s, 70+, unclear), `build`, `hair`, `facial_hair`, up to 3 `distinctive_features` |
 | `confidence` | 0..1 |
 
 The prompt tells the model to judge only from costume, uniform, props,
 setting, actions, framing and dialogue, never from ethnicity, skin colour,
 religion, gender or age, and never to name actors or real people. "unclear"
-is always allowed.
+is always allowed. The physical description is only what the images show; it
+leaves out ethnicity, skin colour and attractiveness, which cannot be read
+reliably from a face and add nothing to following the story. A part the model
+leaves out or gets wrong becomes "unclear" instead of failing the role.
+
+## Names and profiles
+
+Names come only from the film: what characters say and what is written on
+screen. Nothing is matched against actors or any database.
+
+- **Transcript.** A line already tied to a character that says "I'm Tony
+  Stark", "my name is ..." or "call me ..." is a self-introduction.
+- **Scene readings** (with `--story`). For each scene the model lists the
+  names heard in the dialogue or shown on screen and whom each belongs to:
+  the speaker (`self_introduction`), the person spoken to (`addressed`), a
+  person in the scene the line is about (`mentioned_present`), someone not in
+  the scene (`mentioned_absent`), or a caption (`on_screen_text`). A name that
+  does not occur in the scene's dialogue is dropped unless it was on screen,
+  so the model cannot fill in names it knows from elsewhere.
+
+Forms of one name ("Tony Stark", "Mr. Stark", "Tony", "Stark") are merged
+under the fullest form. Votes are weighted (self-introduction 3, caption 2,
+addressed 2, mentioned while present 1); a character is named when the best
+name reaches 2, and a name goes to one character only. Names that only ever
+refer to absent people go to `story.names_not_on_screen`.
+
+`characters[].name` is `{name, also_called, confidence, evidence}`, where
+`evidence` lists the lines or scenes behind it. `characters[].profile` is one
+sentence built from the name, the physical description, the clothing and the
+role, for example:
+
+> Man named Tony Stark ("Mr. Stark"); appears to be in his 40s; slim,
+> athletic; short dark hair; Van Dyke beard; dark suit and tinted glasses;
+> protagonist (hero, business person).
+
+Without `--character-roles` the profile has only the name; without a name it
+starts with "Man", "Woman" or "Person".
 
 `main_character` combines both: the most prominent character (unless the model
 calls them the antagonist), or a character the model calls the protagonist
@@ -87,8 +124,8 @@ About one model call per character.
   `outfit_ids`, `outfits` (named colours, screen seconds, a sample time and
   box), `screen_seconds`, `face_visible_seconds`, `shots`, `first_seconds`,
   `last_seconds`, `voice_groups`, `dialogue_seconds`, `prominence`,
-  `prominence_rank`, `likely_main_character`, `main_character` and, with
-  `--character-roles`, `role`.
+  `prominence_rank`, `likely_main_character`, `main_character`, `name`,
+  `profile` and, with `--character-roles`, `role`.
 - `character_tracks[]`: every appearance with its character, face ID, outfit
   ID, how it was linked (`face` or `clothing`), times and shot.
 - `timeline[].characters_present`: who is on screen in each interval, for
@@ -100,8 +137,9 @@ Boxes are in pixels of the 960 px wide sampled frames.
 
 ## Privacy
 
-People are grouped within one video only. Nobody is named, matched against
-any database or looked up online. Face and body embeddings stay in memory and
+People are grouped within one video only. Nobody is matched against any
+database or looked up online; names come only from the film's own dialogue
+and on-screen text. Face and body embeddings stay in memory and
 are never written to the output. Run this only on video you have the right to
 process.
 

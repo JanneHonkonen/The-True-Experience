@@ -43,7 +43,11 @@ Timeline intervals get `scene_ids`.
    - `story_beat` (setup, inciting_incident, rising_action, confrontation,
      crisis, climax, falling_action, resolution, unclear)
    - `emotional_turn`, `character_actions`, `confidence`
-2. **Arc.** One text-only call over all scene readings, the cast and the
+   - `name_mentions`: names heard or shown in the scene, whom each belongs
+     to and how (see [names](CHARACTERS.md#names-and-profiles))
+2. **Names.** The name mentions of all scenes are merged into a `name` per
+   character before the arc, so the arc can use them.
+3. **Arc.** One text-only call over all scene readings, the cast and the
    measured turning points. `story` holds:
    - `logline`, `genres`
    - `form` (full_story, trailer_or_montage, excerpt, unclear)
@@ -53,6 +57,7 @@ Timeline intervals get `scene_ids`.
      for example a suited figure and the character who builds the suit, each
      with a confidence
    - `confidence`
+   - `names_not_on_screen`: names that only ever refer to absent people
 
 The model may use character names only if they are spoken in the dialogue,
 and never names actors or real people. Unknown scene or character IDs in its

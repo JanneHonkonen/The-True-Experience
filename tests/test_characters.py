@@ -136,6 +136,13 @@ class RoleTests(unittest.TestCase):
             validate({**good, "narrative_role": "evil"})
         with self.assertRaises(ValueError):
             validate({**good, "archetypes": ["wizard"]})
+        self.assertEqual(r["physical"]["apparent_age_range"], "unclear")  # missing -> unclear
+        look = validate({**good, "apparent_gender": "man", "apparent_age_range": "40s", "build": " slim ",
+                         "hair": "", "facial_hair": "Van Dyke beard", "distinctive_features": ["scar", 3],
+                         "apparent_ethnicity": "x"})["physical"]
+        self.assertEqual(look, {"apparent_gender": "man", "apparent_age_range": "40s", "build": "slim",
+                                "hair": "unclear", "facial_hair": "Van Dyke beard",
+                                "distinctive_features": ["scar"]})
 
     @unittest.skipIf(np is None or cv2 is None, "NumPy or OpenCV not installed")
     def test_interpret_with_fake_model(self):
