@@ -24,6 +24,17 @@ FRAME = 640          # 40 ms
 HOP = 160            # 10 ms
 F0_MIN, F0_MAX = 70.0, 400.0
 DEFAULT_EMOTION_MODEL = "superb/wav2vec2-base-superb-er"
+DEFAULT_SPEAKER_MODEL = "microsoft/wavlm-base-plus-sv"
+SPEAKER_THRESHOLD = 0.80     # cosine similarity; the model card suggests 0.86 for clean audio
+MIN_SPEAKER_SECONDS = 1.0
+EMOTION_LIFT = 0.15          # how far above the film's typical score a line must be
+
+
+def speech_suspect(seg):
+    """A long segment with very few words is usually Whisper writing text over music."""
+    seconds = seg["end_seconds"] - seg["start_seconds"]
+    words = len(str(seg.get("text", "")).split())
+    return seconds >= 6.0 and words / seconds < 0.6
 
 # Valence/arousal for common speech-emotion labels.
 EMOTION_VA = {
@@ -58,8 +69,12 @@ def _frames(samples):
     return samples[idx]
 
 
-def pitch_track(samples, rate=RATE):
-    """F0 per 10 ms frame by normalised autocorrelation; NaN where unvoiced."""
+def pitch_track(samples, rate=RATE, threshold=0.15):
+    """F0 per 10 ms frame with the YIN difference function; NaN where unvoiced.
+
+    YIN's cumulative-mean normalisation avoids most octave errors that plain
+    autocorrelation makes on real (and separated) voices.
+    """
     np = _np()
     frames = _frames(samples.astype(np.float64))
     frames = frames - frames.mean(axis=1, keepdims=True)
@@ -67,12 +82,32 @@ def pitch_track(samples, rate=RATE):
     spec = np.fft.rfft(frames, n=2 * FRAME, axis=1)
     ac = np.fft.irfft(np.abs(spec) ** 2, axis=1)[:, :FRAME]
     lo, hi = int(rate / F0_MAX), int(rate / F0_MIN)
-    lags = lo + np.argmax(ac[:, lo:hi], axis=1)
-    peak = ac[np.arange(len(ac)), lags] / np.maximum(ac[:, 0], 1e-12)
+    diff = 2.0 * (ac[:, :1] - ac[:, :hi + 1])            # d(tau), tau = 0..hi
+    diff[:, 0] = 0.0
+    cum = np.cumsum(diff[:, 1:], axis=1) / np.arange(1, hi + 1)
+    cmnd = np.ones_like(diff)
+    cmnd[:, 1:] = diff[:, 1:] / np.maximum(cum, 1e-12)
+    band = cmnd[:, lo:hi + 1]
+    below = band < threshold
+    # First dip under the threshold, then walk to its local minimum.
+    first = np.where(below.any(axis=1), below.argmax(axis=1), band.argmin(axis=1))
+    idx = first.copy()
+    for _ in range(8):
+        step = np.minimum(idx + 1, band.shape[1] - 1)
+        better = band[np.arange(len(band)), step] < band[np.arange(len(band)), idx]
+        idx = np.where(better, step, idx)
+    best = band[np.arange(len(band)), idx]
+    lags = (lo + idx).astype(np.float64)
+    # Parabolic interpolation around the minimum for sub-sample precision.
+    left = band[np.arange(len(band)), np.maximum(idx - 1, 0)]
+    right = band[np.arange(len(band)), np.minimum(idx + 1, band.shape[1] - 1)]
+    denom = left - 2 * best + right
+    with np.errstate(divide="ignore", invalid="ignore"):
+        shift = np.where(np.abs(denom) > 1e-12, 0.5 * (left - right) / denom, 0.0)
+    lags = lags + np.clip(np.nan_to_num(shift), -1.0, 1.0)
     loud_enough = energy > 1e-6 * FRAME  # about -60 dBFS
-    voiced = (peak > 0.5) & loud_enough
-    f0 = np.where(voiced, rate / lags, np.nan)
-    return f0
+    voiced = (best < 0.35) & loud_enough
+    return np.where(voiced, rate / lags, np.nan)
 
 
 def prosody(samples, text, rate=RATE):
@@ -161,6 +196,96 @@ def cluster_speakers(fingerprints, threshold=0.7):
     return labels
 
 
+def load_speaker_backend(model=DEFAULT_SPEAKER_MODEL):
+    """Speaker embedding (x-vector) model from transformers; GPU when available."""
+    try:
+        import torch
+        from transformers import AutoFeatureExtractor, WavLMForXVector
+    except ImportError as exc:
+        raise RuntimeError("Speaker embeddings need transformers and torch "
+                           "(python -m pip install -r requirements.txt)") from exc
+    np = _np()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    extractor = AutoFeatureExtractor.from_pretrained(model)
+    net = WavLMForXVector.from_pretrained(model).to(device).eval()
+
+    def embed(samples, rate):
+        inputs = extractor([samples], sampling_rate=rate, return_tensors="pt", padding=True)
+        with torch.no_grad():
+            vec = net(**{k: v.to(device) for k, v in inputs.items()}).embeddings[0]
+        vec = vec.cpu().numpy().astype(np.float64)
+        return vec / max(1e-9, float(np.linalg.norm(vec)))
+
+    def close():
+        nonlocal net
+        net = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    embed.close = close
+    return embed
+
+
+def cluster_embeddings(vectors, threshold=SPEAKER_THRESHOLD):
+    """Average-linkage clustering of unit speaker embeddings by cosine similarity."""
+    np = _np()
+    if not vectors:
+        return []
+    X = np.array(vectors, dtype=np.float64)
+    sim = X @ X.T
+    clusters = [[i] for i in range(len(X))]
+    while len(clusters) > 1:
+        best = None
+        for a in range(len(clusters)):
+            for b in range(a + 1, len(clusters)):
+                s = float(sim[np.ix_(clusters[a], clusters[b])].mean())
+                if best is None or s > best[0]:
+                    best = (s, a, b)
+        if best[0] < threshold:
+            break
+        _, a, b = best
+        clusters[a] += clusters.pop(b)
+    labels = [None] * len(X)
+    for n, members in enumerate(sorted(clusters, key=min), 1):
+        for m in members:
+            labels[m] = f"S{n}"
+    return labels
+
+
+def relative_emotions(raw):
+    """Re-read each line's emotion against the film's own average.
+
+    A classifier that leans one way on a whole soundtrack (separated vocals
+    came out "angry" for 22 of 25 trailer lines) then still shows which lines
+    are angrier, happier or sadder than usual. ``raw`` holds score lists or None.
+    """
+    labels = sorted({str(i["label"]).strip().lower() for r in raw if r for i in r})
+    if not labels:
+        return [None] * len(raw)
+    rows = [None if r is None else {str(i["label"]).strip().lower(): float(i["score"]) for i in r}
+            for r in raw]
+    present = [r for r in rows if r]
+    # Median, not mean: one odd line (music, a scream) should not move the baseline.
+    mean = {k: sorted(r.get(k, 0.0) for r in present)[len(present) // 2] for k in labels}
+    out = []
+    for r in rows:
+        if r is None:
+            out.append(None)
+            continue
+        lift = {k: r.get(k, 0.0) - mean[k] for k in labels}
+        positive = [{"label": k, "score": v} for k, v in lift.items() if v > 0]
+        reading = emotion_reading(positive) if positive else None
+        top_raw = max(r.items(), key=lambda kv: kv[1])
+        top = max(lift.items(), key=lambda kv: kv[1])
+        if reading is None or top[1] < EMOTION_LIFT:
+            reading = {"label": "neu", "valence": 0.0, "arousal": 0.0}
+        out.append({"label": reading["label"] if top[1] >= EMOTION_LIFT else "neu",
+                    "score": _r(r.get(top[0], 0.0)), "lift": _r(top[1]),
+                    "valence": reading["valence"], "arousal": reading["arousal"],
+                    "model_label": top_raw[0], "model_score": _r(top_raw[1]),
+                    "relative_to": "film_median"})
+    return out
+
+
 # --------------------------------------------------------- voice emotion ----
 
 def load_emotion_backend(model=DEFAULT_EMOTION_MODEL):
@@ -229,34 +354,77 @@ def stream_segments(video, segments, rate=RATE):
 
 
 def analyze_voice(video, speech, *, emotion_model=DEFAULT_EMOTION_MODEL,
-                  emotion_backend=None, audio_loader=None):
-    """Add ``voice`` to each speech segment in place. Returns stage metadata."""
+                  emotion_backend=None, audio_loader=None,
+                  speaker_model=DEFAULT_SPEAKER_MODEL, speaker_backend=None):
+    """Add ``voice`` and ``speaker`` to each speech segment in place. Returns stage metadata."""
+    np = _np()
     segments = sorted(speech, key=lambda s: (s["start_seconds"], s["end_seconds"]))
     if not segments:
         return {"segments": 0, "speakers": 0, "emotion_model": None}
     if emotion_backend is None and emotion_model:
         emotion_backend = load_emotion_backend(emotion_model)
+    if speaker_backend is None and speaker_model:
+        try:
+            speaker_backend = load_speaker_backend(speaker_model)
+        except Exception as exc:  # model download or import problems: fall back, say so
+            print(f"WARNING: speaker model unavailable ({exc}); using MFCC voice fingerprints",
+                  file=sys.stderr)
+            speaker_backend = None
     loader = audio_loader or (lambda: stream_segments(video, segments))
-    fingerprints = []
+    fingerprints, embeddings, raw_emotions = [], [], []
     try:
         for seg, samples in zip(segments, loader()):
             info = prosody(samples, seg.get("text", "")) or {}
-            emotion = None
-            if emotion_backend is not None and len(samples) >= RATE // 2:
-                emotion = emotion_reading(emotion_backend(samples, RATE))
-            seg["voice"] = {**info, "emotion": emotion}
+            scores = None
+            suspect = speech_suspect(seg)
+            if suspect:
+                seg["speech_suspect"] = "few_words_for_length"
+            if emotion_backend is not None and len(samples) >= RATE // 2 and not suspect:
+                scores = emotion_backend(samples, RATE)
+            raw_emotions.append(scores)
+            seg["voice"] = {**info, "emotion": None}
+            long_enough = len(samples) >= RATE // 2 and not suspect
             fingerprints.append(voice_fingerprint(samples, pitch_hz=info.get("pitch_median_hz"))
-                                if len(samples) >= RATE // 2 else None)
+                                if long_enough else None)
+            embeddings.append(speaker_backend(samples, RATE)
+                              if speaker_backend is not None and long_enough else None)
     finally:
-        close = getattr(emotion_backend, "close", None)
-        if close:
-            close()
-    usable = [i for i, f in enumerate(fingerprints) if f is not None]
-    labels = cluster_speakers([fingerprints[i] for i in usable])
-    for i, label in zip(usable, labels):
+        for backend in (emotion_backend, speaker_backend):
+            close = getattr(backend, "close", None)
+            if close:
+                close()
+    for seg, reading in zip(segments, relative_emotions(raw_emotions)):
+        seg["voice"]["emotion"] = reading
+    if speaker_backend is not None:
+        seconds = [s["end_seconds"] - s["start_seconds"] for s in segments]
+        core = [i for i, e in enumerate(embeddings) if e is not None and seconds[i] >= MIN_SPEAKER_SECONDS]
+        labels = dict(zip(core, cluster_embeddings([embeddings[i] for i in core])))
+        # Short lines join the closest group if they are close enough.
+        groups = {}
+        for i, label in labels.items():
+            groups.setdefault(label, []).append(embeddings[i])
+        centres = {k: np.mean(v, axis=0) / max(1e-9, float(np.linalg.norm(np.mean(v, axis=0))))
+                   for k, v in groups.items()}
+        for i, e in enumerate(embeddings):
+            if e is None or i in labels or not centres:
+                continue
+            label, sim = max(((k, float(c @ e)) for k, c in centres.items()), key=lambda kv: kv[1])
+            if sim >= SPEAKER_THRESHOLD:
+                labels[i] = label
+        method, source = "wavlm_xvector_average_linkage", "speaker_embedding_cluster"
+    else:
+        usable = [i for i, f in enumerate(fingerprints) if f is not None]
+        labels = dict(zip(usable, cluster_speakers([fingerprints[i] for i in usable])))
+        method, source = "mfcc_pitch_average_linkage", "voice_fingerprint_cluster"
+    for i, label in labels.items():
         segments[i]["speaker"] = label
-        segments[i]["speaker_source"] = "voice_fingerprint_cluster"
-    print(f"Voice: {len(segments)} segments, {len(set(labels))} voice groups", file=sys.stderr)
-    return {"segments": len(segments), "speakers": len(set(labels)),
+        segments[i]["speaker_source"] = source
+    groups = set(labels.values())
+    print(f"Voice: {len(segments)} segments, {len(groups)} voice groups", file=sys.stderr)
+    return {"segments": len(segments), "speakers": len(groups),
             "emotion_model": emotion_model if emotion_backend is not None else None,
-            "speaker_method": "mfcc_pitch_average_linkage"}
+            "emotion_scale": "relative_to_film_median",
+            "suspect_segments": sum(1 for s in segments if s.get("speech_suspect")),
+            "speaker_model": speaker_model if speaker_backend is not None else None,
+            "speaker_method": method,
+            "speaker_threshold": SPEAKER_THRESHOLD if speaker_backend is not None else None}

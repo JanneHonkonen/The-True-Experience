@@ -84,17 +84,74 @@ class AnalyzeVoiceTests(unittest.TestCase):
                   for i in range(3)]
         calls, closed = [], []
 
+        happy = [0.9, 0.2, 0.2]
+
         def emotion(samples, rate):
+            h = happy[len(calls)]
             calls.append(len(samples))
-            return [{"label": "hap", "score": 0.9}, {"label": "neu", "score": 0.1}]
+            return [{"label": "hap", "score": h}, {"label": "neu", "score": 1 - h}]
         emotion.close = lambda: closed.append(True)
-        meta = analyze_voice("x.mp4", speech, emotion_backend=emotion, audio_loader=lambda: iter(clips))
+        meta = analyze_voice("x.mp4", speech, emotion_backend=emotion, speaker_model=None,
+                             audio_loader=lambda: iter(clips))
         self.assertEqual(len(calls), 3)
         self.assertEqual(closed, [True])
         self.assertEqual(speech[0]["voice"]["emotion"]["label"], "hap")
         self.assertEqual(speech[0]["speaker"], speech[2]["speaker"])
         self.assertNotEqual(speech[0]["speaker"], speech[1]["speaker"])
         self.assertEqual(meta["speakers"], 2)
+        self.assertEqual(speech[1]["voice"]["emotion"]["label"], "neu")  # below the film's average
+        self.assertEqual(speech[1]["voice"]["emotion"]["model_label"], "neu")
+
+    def test_speaker_embeddings_group_voices(self):
+        from true_experience.voice import analyze_voice
+        rng = np.random.default_rng(0)
+        a, b = rng.normal(size=192), rng.normal(size=192)
+        who = ["a", "b", "a", "a", "b"]
+        lengths = [2.0, 2.0, 0.6, 1.5, 3.0]
+        clips = [voice(150, n) for n in lengths]
+        speech, t = [], 0.0
+        for n in lengths:
+            speech.append({"start_seconds": t, "end_seconds": t + n, "text": "x"})
+            t += n + 0.5
+        order = iter(who)
+        closed = []
+
+        def speaker(samples, rate):
+            base = a if next(order) == "a" else b
+            v = base + 0.2 * rng.normal(size=192)
+            return v / np.linalg.norm(v)
+        speaker.close = lambda: closed.append(True)
+        meta = analyze_voice("x", speech, emotion_model=None, speaker_backend=speaker,
+                             audio_loader=lambda: iter(clips))
+        labels = [s.get("speaker") for s in speech]
+        self.assertEqual(labels, ["S1", "S2", "S1", "S1", "S2"])  # short line joins its voice
+        self.assertEqual(meta["speakers"], 2)
+        self.assertEqual(meta["speaker_method"], "wavlm_xvector_average_linkage")
+        self.assertEqual(speech[0]["speaker_source"], "speaker_embedding_cluster")
+        self.assertEqual(closed, [True])
+
+    def test_long_segment_with_few_words_is_suspect(self):
+        from true_experience.voice import speech_suspect
+        self.assertTrue(speech_suspect({"start_seconds": 43.0, "end_seconds": 60.6,
+                                        "text": "You have to look tomorrow."}))
+        self.assertFalse(speech_suspect({"start_seconds": 0, "end_seconds": 3,
+                                         "text": "Hi."}))
+        self.assertFalse(speech_suspect({"start_seconds": 0, "end_seconds": 8,
+                                         "text": " ".join(["word"] * 20)}))
+
+    def test_relative_emotion_removes_a_constant_lean(self):
+        from true_experience.voice import relative_emotions
+        raw = [[{"label": "ang", "score": 0.75}, {"label": "sad", "score": 0.15}, {"label": "neu", "score": 0.1}],
+               [{"label": "ang", "score": 0.75}, {"label": "sad", "score": 0.15}, {"label": "neu", "score": 0.1}],
+               [{"label": "ang", "score": 0.5}, {"label": "sad", "score": 0.4}, {"label": "neu", "score": 0.1}],
+               None]
+        out = relative_emotions(raw)
+        self.assertEqual([o["model_label"] for o in out[:3]], ["ang"] * 3)
+        self.assertEqual(out[2]["label"], "sad")
+        self.assertLess(out[2]["valence"], 0)
+        self.assertLess(out[2]["arousal"], 0)
+        self.assertEqual(out[0]["label"], "neu")
+        self.assertIsNone(out[3])
 
     def test_no_speech_is_a_no_op(self):
         from true_experience.voice import analyze_voice

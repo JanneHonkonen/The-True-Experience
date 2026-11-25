@@ -608,6 +608,9 @@ def link_speech(speech, track_rows, characters):
     for seg in speech:
         a, b = seg["start_seconds"], seg["end_seconds"]
         visible = {}
+        if seg.get("speech_suspect"):
+            seg["_visible"] = {}
+            continue
         for row in track_rows:
             n = sum(1 for t in row["times"] if a <= t < b)
             if n and row["face_visible"]:

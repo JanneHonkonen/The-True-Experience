@@ -37,9 +37,20 @@ Options:
   and sad. Check the licence of any replacement.
 
 Known limits:
-- Audio is the full mix; music and explosions disturb pitch and emotion until
-  source separation (Demucs) lands.
-- Voice groups are a rough fingerprint (MFCC statistics plus pitch), not true
-  speaker recognition. Good for clearly different voices, unreliable for
-  similar ones. A proper speaker-embedding model can replace it later.
+- With `--voice`, analysis runs on the Demucs vocals stem (see
+  [SEPARATION.md](SEPARATION.md)). With `--no-separate-audio` it falls back to
+  the full mix, where music and explosions disturb pitch and emotion: on a
+  trailer, one speaker's pitch read anywhere from 110 to 400 Hz.
+- Voice groups come from a speaker-embedding model,
+  `microsoft/wavlm-base-plus-sv` (MIT, about 0.4 GB, `--speaker-model`).
+  Lines of at least 1 s are grouped by cosine similarity (threshold 0.80,
+  average linkage). Shorter lines join the closest group only when they are
+  that close. `--speaker-model none`, or a failed model load, falls back to
+  the rough MFCC-plus-pitch fingerprint, which over-splits real dialogue.
+- Voice emotion is read *relative to the film's own average*. On separated
+  trailer vocals the model said "angry" for 22 of 25 lines. Now `label` is the
+  emotion a line shows more than the film's typical line (or `neu`), and
+  `model_label` keeps the model's raw top answer.
+- Pitch uses the YIN method, which makes fewer octave errors than plain
+  autocorrelation.
 - The default emotion model was trained on acted English speech.
