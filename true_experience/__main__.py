@@ -12,6 +12,27 @@ def positive(value):
         raise argparse.ArgumentTypeError("Expected a positive finite number")
     return n
 
+def write_outputs(result,path,details=True):
+    """The compact experience file, the full details and the narration text. Returns the paths."""
+    from .compact import experience
+    from .narration import render_text
+    dump = lambda data: json.dumps(data,indent=2,ensure_ascii=False,allow_nan=False)+"\n"
+    saved = []
+    view = experience(result)
+    if details:
+        detail_path = path.with_name(path.stem+"_details"+path.suffix)
+        detail_path.write_text(dump(result),encoding="utf-8")
+        view["about"]["details_file"] = detail_path.name
+        saved.append(detail_path)
+    path.write_text(dump(view),encoding="utf-8")
+    saved.insert(0,path)
+    if result.get("narration"):
+        text_path = path.with_name(path.stem+"_narration.md")
+        text_path.write_text(render_text(Path(result["metadata"]["source_file"]).stem,
+                                         result["narration"],result.get("story")),encoding="utf-8")
+        saved.append(text_path)
+    return saved
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="The True Experience: evidence-first video timeline")
     p.add_argument("video",help="Local video file")
@@ -52,6 +73,12 @@ def main(argv=None):
     p.add_argument("--story",metavar="MODEL",
                    help="Local Ollama vision model that reads each scene and the whole story arc, "
                         "e.g. qwen3.5:9b; implies --scenes")
+    p.add_argument("--narration",action=argparse.BooleanOptionalAction,default=True,
+                   help="With --story, write timed passages per scene that describe what is seen, heard and "
+                        "felt, quoting the real lines (on by default; --no-narration skips it)")
+    p.add_argument("--details",action=argparse.BooleanOptionalAction,default=True,
+                   help="Also write the full analysis with every measurement to <output>_details.json "
+                        "(on by default; the main output is the compact experience file)")
     p.add_argument("--speaker-model",default="microsoft/wavlm-base-plus-sv",
                    help="Hugging Face speaker-embedding model for voice groups; 'none' uses rough MFCC fingerprints")
     p.add_argument("--separate-audio",action=argparse.BooleanOptionalAction,default=None,
@@ -73,13 +100,14 @@ def main(argv=None):
                          character_fps=a.character_fps,
                          separate_audio=a.voice if a.separate_audio is None else a.separate_audio,
                          separation_model=a.separation_model,
-                         scenes=a.scenes,story_model=a.story,
+                         scenes=a.scenes,story_model=a.story,narration=a.narration,
                          voice_speaker_model=None if a.speaker_model.lower()=="none" else a.speaker_model,
                          voice_emotion_model=None if a.voice_emotion_model.lower()=="none" else a.voice_emotion_model)
         path = Path(a.output)
         path.parent.mkdir(parents=True,exist_ok=True)
-        path.write_text(json.dumps(result,indent=2,ensure_ascii=False,allow_nan=False)+"\n",encoding="utf-8")
-        print(f"Saved {len(result['shots'])} shots and {len(result['timeline'])} intervals to {path}")
+        saved = write_outputs(result,path,details=a.details)
+        print(f"Saved {len(result['shots'])} shots and {len(result['timeline'])} intervals: "
+              + ", ".join(str(p) for p in saved))
         timing=result["metadata"].get("timing_seconds") or {}
         if timing:
             print("Timing (s): "+", ".join(f"{k}={v}" for k,v in timing.items()))

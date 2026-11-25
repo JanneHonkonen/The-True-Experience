@@ -93,14 +93,35 @@ Lighter variants:
 | `--characters` | finds people, follows them by face and by clothing, and gives each character one ID | none |
 | `--character-roles qwen3.5:9b` | adds each character's role and apparent occupation (implies `--characters`) | the vision model again |
 | `--scenes` | groups shots into scenes | none |
-| `--story qwen3.5:9b` | reads each scene (what happens, beat, emotional turn) and the whole arc (implies `--scenes`) | the vision model again |
+| `--story qwen3.5:9b` | reads each scene (what happens, beat, emotional turn) and the whole arc, then writes the timed narration (implies `--scenes`) | the vision model again |
+| `--no-narration` | keeps the scene readings and arc, skips the narration pass | |
+| `--no-details` | writes only the compact experience file, not `_details.json` | |
 | `--visual-mood-frames N` | frames per interval sent to the vision model (1-8, default 6) | |
 
 Run `python -m true_experience --help` for every option. The command prints a
 timing line per stage, and the same numbers are saved in
 `metadata.timing_seconds`.
 
-### What the output contains
+### The three output files
+
+With `-o clip_feeling.json` the run writes:
+
+| File | What it is |
+|---|---|
+| `clip_feeling.json` | The **experience file**: the film (logline, form, emotional journey, turning points), the cast (name, profile, role), and the scenes in order with place, feeling from start to end, who is there, the timed narration and the lines spoken with who says them and how. About 20 KB for a 2:30 trailer instead of 340 KB. |
+| `clip_feeling_narration.md` | The narration as text to read, one timed passage after another (with `--story`). |
+| `clip_feeling_details.json` | Everything measured, for tuning and research: the full analysis described below. |
+
+The narration reads like a person telling you the film as it unfolds:
+
+> **[00:06]** Flashbulbs pop in the night as Tony Stark steps out of the car in a black
+> suit. The music drives hard and the crowd presses in. A blonde reporter cuts in, almost
+> accusing: "Mr. Stark, you've been called the Da Vinci of our time. What do you say to
+> that?" He doesn't miss a beat, deadpan: "Absolutely ridiculous. I don't paint."
+
+*(An illustration of the style; the wording changes from run to run.)*
+
+### What the details file contains
 
 - `timeline[]`: one entry per 5 s interval, with shots, speech, measured
   `feeling_signals` and, when the stages ran, `feeling` and `emotion`.

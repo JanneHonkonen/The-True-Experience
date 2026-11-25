@@ -165,6 +165,7 @@ Process changes over the earlier version:
    Stage 3 separation: Demucs vocals and music stems feed speech, voice and music. *(see docs/SEPARATION.md)*
    Stage 9 scenes and story: scene grouping, scene readings, whole-film arc. *(see docs/STORY.md)*
    Stage 9c character names and profiles from dialogue and on-screen text. *(see docs/CHARACTERS.md)*
+   Stage 9d narration and the compact experience file. *(see docs/STORY.md)*
 4. GPU backends one at a time, each optional with a fake backend in tests:
    Demucs, voice emotion, CLAP music mood, PANNs sound events, Qwen3-VL visual mood.
 5. Stage 9: interpretation and whole-film emotional arc. *(first version: scenes and story, docs/STORY.md)*
