@@ -23,7 +23,8 @@ the film before it tries to follow the story. The full design is in
 | Music mood and sound events (CLAP, PANNs) | planned | GPU |
 | Characters: face identity, clothing or suit identity, one ID per character, voice link | working, first version | CPU |
 | Character roles: main character, hero, villain, journalist, business person ... | working, first version | GPU (same vision model) |
-| Scenes and narrative arc | later | |
+| Scenes: shots grouped by look, people, dialogue and silence | working, first version | CPU |
+| Story: scene readings, story beats, whole-film arc and turning points | working, first version | GPU (same vision model) |
 | "Talk about the film" interpretation | later | |
 
 Measured on an RTX 5080 (12 GB) with a 2:29 trailer: about 105 s in total,
@@ -76,7 +77,7 @@ downloads the Demucs weights (about 80 MB) once.
 The full feeling run on a local video:
 
 ```powershell
-python -m true_experience "C:\Videos\clip.mp4" --voice --whisper-model large-v3-turbo --visual-mood-model qwen3.5:9b --character-roles qwen3.5:9b -o clip_feeling.json
+python -m true_experience "C:\Videos\clip.mp4" --voice --whisper-model large-v3-turbo --visual-mood-model qwen3.5:9b --character-roles qwen3.5:9b --story qwen3.5:9b -o clip_feeling.json
 ```
 
 Lighter variants:
@@ -90,6 +91,8 @@ Lighter variants:
 | `--voice-emotion-model none` | keeps prosody and voice groups, skips the emotion model | |
 | `--characters` | finds people, follows them by face and by clothing, and gives each character one ID | none |
 | `--character-roles qwen3.5:9b` | adds each character's role and apparent occupation (implies `--characters`) | the vision model again |
+| `--scenes` | groups shots into scenes | none |
+| `--story qwen3.5:9b` | reads each scene (what happens, beat, emotional turn) and the whole arc (implies `--scenes`) | the vision model again |
 | `--visual-mood-frames N` | frames per interval sent to the vision model (1-8, default 6) | |
 
 Run `python -m true_experience --help` for every option. The command prints a
@@ -113,12 +116,16 @@ timing line per stage, and the same numbers are saved in
   and colours, screen time, voice groups, prominence, `main_character` and,
   with `--character-roles`, their `role`. `character_tracks[]` lists every
   appearance, and each interval has `characters_present`.
+- `scenes[]`: scenes with their shots, characters, feeling and, with
+  `--story`, a `reading` (summary, place, scene type, story beat, emotional
+  turn). `story`: logline, arc, turning points, protagonist and antagonist,
+  emotional journey and character-link hypotheses.
 - `feeling_curve`: valence, arousal, tension and label over time, the film's
   baselines and its turning points.
 
 Stage guides: [feeling signals](docs/FEELING_SIGNALS.md),
 [visual mood](docs/VISUAL_MOOD.md), [voice](docs/VOICE.md),
-[characters](docs/CHARACTERS.md), [separation](docs/SEPARATION.md).
+[characters](docs/CHARACTERS.md), [separation](docs/SEPARATION.md), [scenes and story](docs/STORY.md).
 
 ## Other tools in the repository
 
