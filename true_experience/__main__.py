@@ -39,6 +39,14 @@ def main(argv=None):
                         "implies --transcribe and --feeling-signals")
     p.add_argument("--voice-emotion-model",default="superb/wav2vec2-base-superb-er",
                    help="Hugging Face audio-classification model for voice emotion; 'none' to skip")
+    p.add_argument("--characters",action="store_true",
+                   help="Find people, follow them by face and by clothing, and group them into characters C1, C2 ... "
+                        "(CPU, OpenCV; downloads about 180 MB of models once)")
+    p.add_argument("--character-roles",metavar="MODEL",
+                   help="Local Ollama vision model that judges each character's role (protagonist, villain, "
+                        "journalist ...), e.g. qwen3.5:9b; implies --characters")
+    p.add_argument("--character-fps",type=float,default=1.0,
+                   help="Frames per second sampled for character tracking (0.1-5)")
     a = p.parse_args(argv)
     try:
         result = analyze(a.video,interval=a.interval,scene_threshold=a.scene_threshold,
@@ -50,6 +58,8 @@ def main(argv=None):
                          feeling_signals=a.feeling_signals or bool(a.visual_mood_model) or a.voice,
                          visual_mood_model=a.visual_mood_model,visual_mood_frames=a.visual_mood_frames,
                          voice=a.voice,
+                         characters=a.characters,character_roles_model=a.character_roles,
+                         character_fps=a.character_fps,
                          voice_emotion_model=None if a.voice_emotion_model.lower()=="none" else a.voice_emotion_model)
         path = Path(a.output)
         path.parent.mkdir(parents=True,exist_ok=True)

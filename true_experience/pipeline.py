@@ -130,7 +130,8 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             caption_frames=False,caption_model="Salesforce/blip-image-captioning-base",
             max_caption_frames=120,caption_spacing=10.0,feeling_signals=False,
             visual_mood_model=None,visual_mood_frames=6,
-            voice=False,voice_emotion_model="superb/wav2vec2-base-superb-er"):
+            voice=False,voice_emotion_model="superb/wav2vec2-base-superb-er",
+            characters=False,character_roles_model=None,character_fps=1.0):
     path=Path(video_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Video file not found: {path}")
@@ -181,6 +182,14 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
     visuals=caption_shots(path,shots,model_name=caption_model,max_frames=max_caption_frames,sample_spacing=caption_spacing) if caption_frames else []
     if caption_frames: lap("frame_captions")
     timeline=build_timeline(duration,interval,shots,silences,info["has_audio"],subtitles)
+    character_result=None
+    if characters or character_roles_model:
+        if not math.isfinite(character_fps) or not 0.1<=character_fps<=5:
+            raise ValueError("character_fps must be between 0.1 and 5")
+        from .characters import analyze_characters
+        # Before align_observations: windows copy speech segments, which gain "character".
+        character_result=analyze_characters(path,info,shots,timeline,speech,fps=character_fps)
+        lap("characters")
     align_observations(timeline,speech,visuals)
     signal_settings=None
     if feeling_signals:
@@ -193,6 +202,12 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         visual_mood_settings=analyze_visual_mood(path,timeline,model=visual_mood_model,
                                                  frames_per_window=visual_mood_frames)
         lap("visual_mood")
+    character_roles=None
+    if character_result and character_roles_model:
+        from .characterhood import interpret_characters
+        character_roles=interpret_characters(path,info,character_result["characters"],speech,timeline,
+                                             model=character_roles_model)
+        lap("character_roles")
     feeling_curve=None
     if feeling_signals:
         from .fusion import fuse_timeline
@@ -211,10 +226,14 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                    (["blip_frame_captioning"] if caption_frames else [])+
                    (["cpu_feeling_signals"] if feeling_signals else [])+
                    (["ollama_visual_mood"] if visual_mood_settings else [])+
-                   (["voice_prosody_and_emotion"] if voice_settings else [])),
+                   (["voice_prosody_and_emotion"] if voice_settings else [])+
+                   (["character_tracking"] if character_result else [])+
+                   (["ollama_character_roles"] if character_roles else [])),
         "feeling_signals":signal_settings,
         "visual_mood":visual_mood_settings,
         "voice":voice_settings,
+        "characters":character_result["settings"] if character_result else None,
+        "character_roles":character_roles,
         "timing_seconds":timing,
         "perception":{"speech_enabled":transcribe,
                       "speech_model":whisper_model if transcribe else None,
@@ -234,8 +253,15 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                         "Music features are computed on the full audio mix, not a separated music track.",
                         "Fused feeling (valence, arousal, tension, emotion label) is a heuristic estimate "
                         "from measured signals, not yet validated against human ratings."]
-                       if feeling_signals else [])},
+                       if feeling_signals else [])+
+                      (["Characters are grouped within this video only; nobody is named or identified.",
+                        "Face and clothing grouping can split one person or merge look-alikes "
+                        "(same uniform, profile faces, dark scenes).",
+                        "Character roles are model judgements of the fictional role from visible cues "
+                        "and dialogue, not facts."] if character_result else [])},
         "shots":shots,
         "silence_intervals":[{"start_seconds":a,"end_seconds":b} for a,b in silences],
         "speech_segments":speech,"visual_observations":visuals,"timeline":timeline,
-        **({"feeling_curve":feeling_curve} if feeling_curve is not None else {})}
+        **({"feeling_curve":feeling_curve} if feeling_curve is not None else {}),
+        **({"characters":character_result["characters"],
+            "character_tracks":character_result["character_tracks"]} if character_result else {})}
