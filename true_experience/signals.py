@@ -5,8 +5,9 @@ measurements, not emotions: they are later mapped to valence/arousal by the
 fusion step. Audio and frames are streamed from FFmpeg one timeline window at a
 time, so memory does not grow with film length. Needs NumPy only.
 
-Audio features are computed on the full mix (no source separation yet), so
-music values can be disturbed by dialogue and effects.
+Loudness and startles are computed on the full mix. When separation ran, the
+same features are also computed on the Demucs music stem (``music``), which
+keeps dialogue out of tempo and key.
 """
 from __future__ import annotations
 
@@ -338,6 +339,8 @@ def compute_signals(video, info, shots, timeline, music_path=None):
         if music_iter is not None:
             samples = next(music_iter, np.zeros(0, dtype=np.float32))
             music = summarize_audio(samples, AUDIO_RATE, music_history, start)
+            if music:
+                music["source"] = "music_stem"
             music_history = np.concatenate([music_history, samples])[-AUDIO_RATE:]
         window["feeling_signals"] = {
             "pacing": summarize_pacing(start, end, shots),

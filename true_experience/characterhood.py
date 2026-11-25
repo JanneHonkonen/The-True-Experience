@@ -78,7 +78,7 @@ Rules:
 - Physical description, only from what the images show, as a viewer would describe the
   character to someone who has not seen the film:
   apparent_gender and apparent_age_range as they appear ("unclear" when the face is hidden,
-  masked or too small); build ("slim", "athletic", "heavyset" ...); hair (length, colour, style);
+  masked or too small); build ("slim", "athletic", "heavyset" ...); hair as one phrase ("short dark hair, swept back");
   facial_hair ("clean-shaven", "Van Dyke beard", "stubble" ...); distinctive_features: up to 3
   (glasses, scar, tattoo, eye patch, armour ...). Use "unclear" for anything not visible.
   Do not describe ethnicity, skin colour or attractiveness.

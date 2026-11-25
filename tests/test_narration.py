@@ -86,7 +86,7 @@ class NarrationTests(unittest.TestCase):
         self.assertEqual(facts["story_so_far"], "The green rating card: this is a trailer.")
         self.assertEqual([d["who"] for d in facts["dialogue"]], ["unrecognised speaker (voice 1)", "Tony Stark"])
         self.assertEqual(facts["dialogue"][1]["delivery"], "flat, deadpan")
-        self.assertIn("driving", facts["music"][0])
+        self.assertIn("driving", facts["music_measured"][0])
         self.assertIn("quote not in the dialogue", sent[2]["messages"][2]["content"])
         self.assertNotIn("C1", json.dumps(facts["people"]) + json.dumps(facts["dialogue"]))
 
@@ -102,6 +102,8 @@ class ExperienceTests(unittest.TestCase):
     def result(self):
         characters, speech, scenes, timeline = fixture()
         scenes[1]["narration"] = [{"t": 6, "time": "00:06", "text": "Flashes pop."}]
+        timeline[1]["feeling_signals"]["listening"] = {
+            "description": "exciting rock; electric guitar", "sounds": [{"label": "camera shutters", "t": 6.0}]}
         return {"metadata": {"source_file": "clip.mp4", "duration_seconds": 149.3, "methods": ["x"]},
                 "shots": [{"shot_id": 1}], "timeline": timeline, "speech_segments": speech,
                 "characters": characters, "character_tracks": [{"x": 1}] * 50, "scenes": scenes,
@@ -122,6 +124,9 @@ class ExperienceTests(unittest.TestCase):
         self.assertEqual([d["text"] for d in sc2["dialogue"]], LINES)
         self.assertEqual(sc2["dialogue"][1]["name"], "Tony Stark")
         self.assertEqual(view["scenes"][0]["summary"], "A green rating card.")
+        self.assertEqual(sc2["music"], [{"time": "00:05", "music": "exciting rock; electric guitar"}])
+        self.assertEqual(sc2["sounds"], [{"time": "00:06", "sound": "camera shutters"}])
+        self.assertEqual(view["scenes"][1]["music_moments"] if "music_moments" in view["scenes"][1] else None, None)
         self.assertEqual(view["feeling_curve"]["turning_points"][0]["time"], "01:20")
         for key in ("shots", "timeline", "character_tracks", "speech_segments"):
             self.assertNotIn(key, view)

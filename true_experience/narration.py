@@ -13,8 +13,10 @@ names and the arc are known. Each call gets:
 - the cast as names or plain descriptions (never IDs),
 - the dialogue with times, who says it and how it is delivered (calm, sharp,
   fast, flat ...) from the voice stage,
-- the music in words (tempo, energy, loudness, major or minor) and the
-  measured feeling at the start and end,
+- the soundtrack from the listening stage (music style, instruments and mood
+  per window, the sound effects with times, music moments such as builds,
+  hits and the music cutting out), the measured music in words (tempo,
+  energy, loudness, major or minor) and the feeling at the start and end,
 - the scene reading, the logline, and the last passage before this scene so
   the narration flows.
 
@@ -50,16 +52,24 @@ passages (t = seconds where the passage starts, inside the scene) that let the r
 the scene: what is seen, what is heard, and above all how it feels.
 Style:
 - Present tense, plain vivid language, like a person describing it, not a report.
-- Weave in the mood: the light, the pace, the music's energy, the tension, people's expressions
-  and how lines are delivered ("she asks, almost accusing"; "he answers, deadpan").
-- Quote dialogue exactly as given, in double quotes, with who says it. Quote only given lines,
+- Weave in the mood: the light, the pace, the tension, people's expressions and how lines are
+  delivered ("she asks, almost accusing"; "he answers, deadpan").
+- Music and sound carry much of the mood, so give them room. When the music starts or changes,
+  say what it is like (its style, instruments and feel, from "soundtrack") and what it does to the
+  moment ("a driving rock riff makes the arrival feel like a show"). Mention the sounds heard
+  ("sounds", with times) where they land, and the "music_moments": a build, a sudden hit, the
+  music cutting out. Silence is felt too: say when the sound drops away. Use only music and
+  sounds the facts list; describe music by its feel and style, never a band, song or composer.
+- Quote dialogue exactly as given, in double quotes, with who says it. Put on-screen text in
+  single quotes ('MAY 2, 2008'). Quote only given lines,
   shorten by leaving words out with "...", never reword inside quotes.
 - Call people by the given name or description. Never write IDs such as C1, S2 or SC3.
   When a speaker is unknown, describe them from the frames ("a blonde reporter").
 - Do not invent plot, places or names that the frames and facts do not support. Never name
   actors or real people. Describe music by its feel, not by guessing a band or song.
 - A title card, rating card or logo is said simply ("The green rating card: this is a trailer").
-- First passage of a scene that continues the last one should flow on from it, not restart.
+- "story_so_far" is the passage you wrote just before this scene. Do not repeat what it already
+  told; carry on from it.
 - About 25 to 90 words per passage; more passages for long or eventful scenes.
 Answer with JSON matching the schema only."""
 
@@ -143,6 +153,36 @@ def music_words(windows, film_rms):
     return out[:3]
 
 
+MOMENT_WORDS = {"music_starts": "the music comes in", "music_stops": "the music cuts out",
+                "music_surges": "the music surges", "music_drops": "the music drops away",
+                "music_builds": "the music builds", "hit": "a sudden hit"}
+
+
+def soundtrack(windows):
+    """The listening stage's music description per window, joined where it does not change."""
+    out = []
+    for w in windows:
+        desc = ((w.get("feeling_signals") or {}).get("listening") or {}).get("description")
+        if desc and (not out or out[-1]["music"] != desc):
+            out.append({"time": mmss(w["start_seconds"]), "music": desc})
+    return out[:4]
+
+
+def scene_sounds(windows, a, b, per_label=2):
+    seen, out = {}, []
+    for w in windows:
+        for hit in ((w.get("feeling_signals") or {}).get("listening") or {}).get("sounds") or []:
+            if a <= hit["t"] < b and seen.get(hit["label"], 0) < per_label:
+                seen[hit["label"]] = seen.get(hit["label"], 0) + 1
+                out.append({"time": mmss(hit["t"]), "sound": hit["label"]})
+    return out[:8]
+
+
+def scene_moments(moments, a, b):
+    return [{"time": mmss(m["t"]), "what": MOMENT_WORDS.get(m["kind"], m["kind"])}
+            for m in moments or [] if a <= m["t"] < b][:6]
+
+
 def _film_music_rms(timeline):
     values = [((w.get("feeling_signals") or {}).get("music") or {}).get("rms_dbfs") for w in timeline]
     values = [v for v in values if v is not None and v >= -45]
@@ -167,7 +207,8 @@ def scene_lines(scene, speech, by_id):
     return out
 
 
-def scene_facts(scene, speech, characters, timeline, story=None, previous=None, film_rms=None):
+def scene_facts(scene, speech, characters, timeline, story=None, previous=None, film_rms=None,
+                moments=None):
     by_id = {c["id"]: c for c in characters or []}
     a, b = scene["start_seconds"], scene["end_seconds"]
     windows = [w for w in timeline or [] if w["start_seconds"] < b and w["end_seconds"] > a]
@@ -189,7 +230,10 @@ def scene_facts(scene, speech, characters, timeline, story=None, previous=None, 
         "people": [by_id[c].get("profile") or describe_person(by_id[c])
                    for c in scene.get("characters", [])[:5] if c in by_id],
         "dialogue": scene_lines(scene, speech, by_id)[:14],
-        "music": music_words(windows, film_rms),
+        "soundtrack": soundtrack(windows) or None,
+        "sounds": scene_sounds(windows, a, b) or None,
+        "music_moments": scene_moments(moments, a, b) or None,
+        "music_measured": music_words(windows, film_rms),
         "feeling": {"start": feeling.get("start_label"), "end": feeling.get("end_label"),
                     "tension": feeling.get("tension"), "peak_tension": feeling.get("peak_tension")},
         "visual_mood": looks[:6],
@@ -217,6 +261,14 @@ def quote_is_real(quote, lines):
 
 
 _QUOTE = re.compile(r"[\"“]([^\"”]{4,})[\"”]")
+_SINGLE = re.compile(r"(?:(?<=[\s(:—-])|^)['‘]([^'’\n]{4,}?)['’](?=[\s.,!?;:)—-]|$)")
+
+
+def _screen_text(quote):
+    """Single-quoted on-screen text: titles in capitals, dates, web addresses."""
+    letters = [c for c in quote if c.isalpha()]
+    return (letters and sum(c.isupper() for c in letters) >= 0.8 * len(letters)) or \
+        bool(re.search(r"www\.|\.com|\.org|\d", quote))
 _ID = re.compile(r"\b(?:SC|C|S)\d{1,3}\b")
 
 
@@ -234,6 +286,13 @@ def validate(output, start, end, lines):
         for quote in _QUOTE.findall(text):
             if not quote_is_real(quote, lines):
                 raise ValueError(f'quote not in the dialogue: "{quote[:60]}"; quote only given lines')
+        for match in list(_SINGLE.finditer(text)):
+            quote = match.group(1)
+            if lines and quote_is_real(quote, lines):
+                text = text.replace(match.group(0), f'"{quote}"', 1)  # dialogue goes in double quotes
+            elif not _screen_text(quote):
+                raise ValueError(f"'{quote[:60]}' is not in the dialogue; put real lines in double quotes "
+                                 "and quote only given lines")
         if _ID.search(text):
             raise ValueError("passages must not contain IDs like C1 or S2; use names or descriptions")
         t = min(max(float(t), start), max(start, end - 0.5))
@@ -243,7 +302,7 @@ def validate(output, start, end, lines):
 
 
 def narrate(video, scenes, speech, characters, timeline, story=None, *, model=DEFAULT_MODEL,
-            frames_per_scene=6, timeout=300, backend=None, frame_loader=None, unload=None):
+            frames_per_scene=6, timeout=300, backend=None, frame_loader=None, unload=None, moments=None):
     """Add ``narration`` to every scene. Returns (passages in time order, metadata)."""
     backend = backend or ollama_chat
     unload = unload or unload_model
@@ -253,7 +312,7 @@ def narrate(video, scenes, speech, characters, timeline, story=None, *, model=DE
     try:
         for n, scene in enumerate(scenes, 1):
             a, b = scene["start_seconds"], scene["end_seconds"]
-            facts = scene_facts(scene, speech, characters, timeline, story, previous, film_rms)
+            facts = scene_facts(scene, speech, characters, timeline, story, previous, film_rms, moments)
             lines = [d["says"] for d in facts["dialogue"]]
             count = max(1, min(frames_per_scene, int(b - a) or 1))
             payload = {"model": model, "stream": False, "think": False, "format": SCHEMA,

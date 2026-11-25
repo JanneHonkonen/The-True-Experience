@@ -63,7 +63,7 @@ class NamingTests(unittest.TestCase):
                                    "build": "slim, fit", "hair": "short dark hair",
                                    "facial_hair": "Van Dyke beard", "distinctive_features": []}}}
         self.assertEqual(profile(c), 'Man named Tony Stark ("Mr. Stark"); appears to be in his 40s; '
-                                     'slim, fit; short dark hair; Van Dyke beard; '
+                                     'slim, fit build; short dark hair; Van Dyke beard; '
                                      'dark suit and tinted glasses; protagonist (hero, business person).')
         masked = {"id": "C6", "role": {"narrative_role": "unclear", "archetypes": ["unclear"],
                                        "physical": {"apparent_gender": "unclear", "apparent_age_range": "unclear",
@@ -71,6 +71,13 @@ class NamingTests(unittest.TestCase):
                                                     "facial_hair": "unclear",
                                                     "distinctive_features": ["full metal armour"]}}}
         self.assertEqual(profile(masked), "Person; full metal armour.")
+        woman = {"id": "C4", "role": {"narrative_role": "supporting", "archetypes": ["journalist"],
+                 "appearance": "Blonde woman in a dark blazer over a light shirt, with shoulder-length hair.",
+                 "physical": {"apparent_gender": "woman", "apparent_age_range": "30s", "build": "slim",
+                              "hair": "shoulder-length blonde hair", "facial_hair": "clean-shaven",
+                              "distinctive_features": ["none visible", "dark blazer"]}}}
+        self.assertEqual(profile(woman), "Woman; appears to be in her 30s; slim build; shoulder-length blonde "
+                                         "hair; wears a dark blazer over a light shirt; supporting (journalist).")
         bare = [{"id": "C9"}, {"id": "C8", "background": True}]
         add_profiles(bare)
         self.assertIsNone(bare[0]["profile"])

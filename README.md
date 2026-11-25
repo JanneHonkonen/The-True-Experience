@@ -20,7 +20,7 @@ the film before it tries to follow the story. The full design is in
 | Voice: pitch, rate, loudness, voice groups, voice emotion | working, needs tuning on real dialogue | CPU + small GPU model |
 | Fusion into one emotional timeline (valence, arousal, tension, label, conflicts, irony, turning points) | working, first version | CPU |
 | Separating dialogue from music (Demucs), feeding speech, voice and music | working, first version | GPU, about 1-2 GB |
-| Music mood and sound events (CLAP, PANNs) | planned | GPU |
+| Listening: music style, instruments and mood, sound effects, music moments (CLAP) | working, first version | GPU, about 1 GB, then freed |
 | Characters: face identity, clothing or suit identity, one ID per character, voice link | working, first version | CPU |
 | Character roles: main character, hero, villain, journalist, business person ... | working, first version | GPU (same vision model) |
 | Scenes: shots grouped by look, people, dialogue and silence | working, first version | CPU |
@@ -78,7 +78,7 @@ downloads the Demucs weights (about 80 MB) once.
 The full feeling run on a local video:
 
 ```powershell
-python -m true_experience "C:\Videos\clip.mp4" --voice --whisper-model large-v3-turbo --visual-mood-model qwen3.5:9b --character-roles qwen3.5:9b --story qwen3.5:9b -o clip_feeling.json
+python -m true_experience "C:\Videos\clip.mp4" --voice --whisper-model large-v3-turbo --visual-mood-model qwen3.5:9b --character-roles qwen3.5:9b --listen --story qwen3.5:9b -o clip_feeling.json
 ```
 
 Lighter variants:
@@ -89,6 +89,7 @@ Lighter variants:
 | `--visual-mood-model qwen3.5:9b` | adds visual mood per interval (implies `--feeling-signals`) | about 7-8 GB |
 | `--voice` | adds transcript, prosody, voice groups and voice emotion (implies `--transcribe`, `--feeling-signals` and `--separate-audio`) | about 3 GB, then freed |
 | `--separate-audio` | splits dialogue from music with Demucs first, so speech, voice and music are measured on clean stems (`--no-separate-audio` turns it off) | about 1-2 GB, then freed |
+| `--listen` | hears the music (style, instruments, mood) and sound effects (explosions, engines, crowds ...) with CLAP, and marks builds, hits and silences | about 1 GB, then freed |
 | `--voice-emotion-model none` | keeps prosody and voice groups, skips the emotion model | |
 | `--characters` | finds people, follows them by face and by clothing, and gives each character one ID | none |
 | `--character-roles qwen3.5:9b` | adds each character's role and apparent occupation (implies `--characters`) | the vision model again |
@@ -153,7 +154,8 @@ The narration reads like a person telling you the film as it unfolds:
 
 Stage guides: [feeling signals](docs/FEELING_SIGNALS.md),
 [visual mood](docs/VISUAL_MOOD.md), [voice](docs/VOICE.md),
-[characters](docs/CHARACTERS.md), [separation](docs/SEPARATION.md), [scenes and story](docs/STORY.md).
+[characters](docs/CHARACTERS.md), [separation](docs/SEPARATION.md), [listening](docs/LISTENING.md),
+[scenes and story](docs/STORY.md).
 
 ## Other tools in the repository
 

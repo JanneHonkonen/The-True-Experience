@@ -10,12 +10,13 @@ The experience file keeps, once each:
 - the film: length, logline, form, genres, emotional journey, turning points,
 - the cast: name, profile and role per character (background extras left out),
 - the scenes in order: time, place, the feeling from start to end, who is
-  there, the narration passages and the lines spoken (with who and how),
+  there, the music heard, the sound effects and music moments, the narration
+  passages and the lines spoken (with who and how),
 - the feeling curve as columns (valence, arousal, tension, label per window).
 """
 from __future__ import annotations
 
-from .narration import describe_person, delivery, mmss
+from .narration import describe_person, delivery, mmss, scene_moments, scene_sounds, soundtrack
 
 
 def _r(x, d=2):
@@ -55,10 +56,11 @@ def _lines(speech, by_id, a=None, b=None):
     return out
 
 
-def _scene(scene, speech, by_id):
+def _scene(scene, speech, by_id, timeline=(), moments=None):
     reading = scene.get("reading") or {}
     feeling = scene.get("feeling") or {}
     a, b = scene["start_seconds"], scene["end_seconds"]
+    windows = [w for w in timeline or [] if w["start_seconds"] < b and w["end_seconds"] > a]
     return {k: v for k, v in {
         "scene_id": scene["scene_id"], "from": mmss(a), "to": mmss(b),
         "start_seconds": a, "end_seconds": b,
@@ -70,6 +72,9 @@ def _scene(scene, speech, by_id):
             "peak_tension": feeling.get("peak_tension"), "valence": feeling.get("valence"),
             "turn": reading.get("emotional_turn")}.items() if v is not None},
         "characters": scene.get("characters") or None,
+        "music": soundtrack(windows) or None,
+        "sounds": scene_sounds(windows, a, b) or None,
+        "music_moments": scene_moments(moments, a, b) or None,
         "narration": [{"time": p["time"], "text": p["text"]} for p in scene.get("narration") or []] or None,
         "summary": None if scene.get("narration") else reading.get("summary"),
         "dialogue": _lines(speech, by_id, a, b) or None,
@@ -111,7 +116,8 @@ def experience(result):
     }.items() if v is not None}
     out = {"format": "true-experience/1", "film": film, "characters": _cast(characters) or None}
     if scenes:
-        out["scenes"] = [_scene(s, speech, by_id) for s in scenes]
+        out["scenes"] = [_scene(s, speech, by_id, result.get("timeline"), result.get("music_moments"))
+                         for s in scenes]
     else:
         out["dialogue"] = _lines(speech, by_id) or None
     out["feeling_curve"] = _curve(result.get("feeling_curve"))

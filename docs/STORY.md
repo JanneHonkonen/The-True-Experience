@@ -75,7 +75,9 @@ into what a viewer would tell a friend: 1 to 4 timed passages per scene in
 the present tense that describe what is seen and heard and how it feels.
 Each call gets the scene's frames, the cast as names or plain descriptions,
 the dialogue with times, speaker and delivery (calm, sharp, fast, flat ...
-from the voice stage), the music in words (energy, tempo, major or minor,
+from the voice stage), with `--listen` the soundtrack (music style,
+instruments and mood, sound effects with times, builds, hits and the music
+cutting out; see [listening](LISTENING.md)), the measured music in words (energy, tempo, major or minor,
 loudness against the film's own level), the feeling at the start and end,
 the visual mood words, the scene reading, the logline and the last passage
 before the scene so the text flows.
