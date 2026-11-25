@@ -6,6 +6,7 @@ only when explicitly requested, never in baseline FFmpeg-only mode.
 from __future__ import annotations
 import io
 import math
+import sys
 import subprocess
 from pathlib import Path
 from .sampling import plan_frame_samples
@@ -42,7 +43,19 @@ def transcribe_audio(video_path: Path, duration: float, *, model_name: str="tiny
             from faster_whisper import WhisperModel
         except ImportError as exc:
             raise _missing("Speech recognition (faster-whisper)", exc) from exc
-        backend=WhisperModel(model_name,device="auto",compute_type="default")
+        device="cpu"
+        try:
+            import ctranslate2
+            if ctranslate2.get_cuda_device_count()>0:
+                device="cuda"
+        except Exception:
+            pass
+        if device=="cpu":
+            print("WARNING: Whisper runs on the CPU (CTranslate2 sees no CUDA device); "
+                  "this is several times slower. Check: python -c \"import ctranslate2; "
+                  "print(ctranslate2.get_cuda_device_count())\"",file=sys.stderr)
+        print(f"Speech: faster-whisper {model_name} on {device}",file=sys.stderr)
+        backend=WhisperModel(model_name,device=device,compute_type="default")
     segments,info=backend.transcribe(str(video_path),language=language,beam_size=5,vad_filter=True)
     lang=getattr(info,"language",None)
     results=[]
