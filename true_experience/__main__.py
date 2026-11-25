@@ -34,16 +34,23 @@ def main(argv=None):
                    help="Local Ollama vision model for visual mood, e.g. qwen3.5:9b; implies --feeling-signals")
     p.add_argument("--visual-mood-frames",type=int,default=6,
                    help="Frames per interval sent to the visual mood model (1-8)")
+    p.add_argument("--voice",action="store_true",
+                   help="Analyze how lines are spoken (pitch, rate, loudness, voice groups, voice emotion); "
+                        "implies --transcribe and --feeling-signals")
+    p.add_argument("--voice-emotion-model",default="superb/wav2vec2-base-superb-er",
+                   help="Hugging Face audio-classification model for voice emotion; 'none' to skip")
     a = p.parse_args(argv)
     try:
         result = analyze(a.video,interval=a.interval,scene_threshold=a.scene_threshold,
                          silence_db=a.silence_db,silence_min_duration=a.silence_min_duration,
-                         subtitles_path=a.subtitles,transcribe=a.transcribe,
+                         subtitles_path=a.subtitles,transcribe=a.transcribe or a.voice,
                          whisper_model=a.whisper_model,language=a.language,
                          caption_frames=a.caption_frames,caption_model=a.caption_model,
                          max_caption_frames=a.max_caption_frames,caption_spacing=a.caption_spacing,
-                         feeling_signals=a.feeling_signals or bool(a.visual_mood_model),
-                         visual_mood_model=a.visual_mood_model,visual_mood_frames=a.visual_mood_frames)
+                         feeling_signals=a.feeling_signals or bool(a.visual_mood_model) or a.voice,
+                         visual_mood_model=a.visual_mood_model,visual_mood_frames=a.visual_mood_frames,
+                         voice=a.voice,
+                         voice_emotion_model=None if a.voice_emotion_model.lower()=="none" else a.voice_emotion_model)
         path = Path(a.output)
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_text(json.dumps(result,indent=2,ensure_ascii=False,allow_nan=False)+"\n",encoding="utf-8")

@@ -156,9 +156,11 @@ Process changes over the earlier version:
 
 ## Implementation order
 
-1. Cleanup: general `experience` command, no hardcoded source labels, this plan. *(done)*
-2. Stages 1, 2 and CPU part of 5: pacing, look, loudness and music basics.
-3. Stage 8: fusion, feeling timeline, tension curve, irony flags.
+1. Cleanup: general `experience` command, no hardcoded source labels, this plan. *(done, #17)*
+2. Stages 1, 2 and CPU part of 5: pacing, look, loudness and music basics. *(done, #18)*
+3. Stage 8: fusion, feeling timeline, tension curve, irony flags. *(done, #19; tuned on real runs)*
+   Stage 7 visual mood with Qwen3.5 9B. *(done, #20)*
+   Stage 4 voice: prosody, voice groups, voice emotion. *(see docs/VOICE.md)*
 4. GPU backends one at a time, each optional with a fake backend in tests:
    Demucs, voice emotion, CLAP music mood, PANNs sound events, Qwen3-VL visual mood.
 5. Stage 9: interpretation and whole-film emotional arc.
