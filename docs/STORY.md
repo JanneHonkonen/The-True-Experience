@@ -68,6 +68,30 @@ character IDs stay separate.
 Time: about 4-6 s per scene on the RTX 5080, so roughly 10-15 minutes for a
 2-hour film with 150 scenes. The model is unloaded at the end.
 
+## Narration (with `--story`, `--no-narration` to skip)
+
+After the names and the arc, one more call per scene turns the measurements
+into what a viewer would tell a friend: 1 to 4 timed passages per scene in
+the present tense that describe what is seen and heard and how it feels.
+Each call gets the scene's frames, the cast as names or plain descriptions,
+the dialogue with times, speaker and delivery (calm, sharp, fast, flat ...
+from the voice stage), the music in words (energy, tempo, major or minor,
+loudness against the film's own level), the feeling at the start and end,
+the visual mood words, the scene reading, the logline and the last passage
+before the scene so the text flows.
+
+Checks on every answer:
+- every quoted line must occur in the transcript of that scene (pieces joined
+  with "..." are checked one by one), so no invented dialogue;
+- no IDs such as C1 or S2 in the text;
+- each passage's time is kept inside its scene.
+
+A failing answer is sent back once with the reason; if it fails again, the
+scene's summary stands in (`fallback: true`). Passages are stored in
+`scenes[].narration` and, in time order, in `narration`; the CLI writes them
+to `<output>_narration.md`. Time: about one scene reading again (4-6 s per
+scene on the RTX 5080).
+
 ## Known limits
 
 - Trailers are montages, so scene grouping and the arc describe the cut, not

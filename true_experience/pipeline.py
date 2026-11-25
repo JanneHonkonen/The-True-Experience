@@ -134,7 +134,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             characters=False,character_roles_model=None,character_fps=1.0,
             separate_audio=False,separation_model="htdemucs",
             voice_speaker_model="microsoft/wavlm-base-plus-sv",
-            scenes=False,story_model=None):
+            scenes=False,story_model=None,narration=True):
     path=Path(video_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Video file not found: {path}")
@@ -246,6 +246,13 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             # No story pass: names from self-introductions in the transcript only.
             _,naming_settings=name_characters(character_result["characters"],speech)
         add_profiles(character_result["characters"])
+    narration_list=None; narration_settings=None
+    if scene_list and story_model and narration:
+        from .narration import narrate
+        narration_list,narration_settings=narrate(
+            path,scene_list,speech,character_result["characters"] if character_result else [],
+            timeline,story,model=story_model)
+        lap("narration")
     timing["total"]=round(time.perf_counter()-started,2)
     timing["seconds_per_video_minute"]=round(timing["total"]/(duration/60),2)
     return {"schema_version":"0.3.0","metadata":{
@@ -264,6 +271,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                    (["character_tracking"] if character_result else [])+
                    (["scene_grouping"] if scene_list is not None else [])+
                    (["ollama_story_reading"] if story_settings else [])+
+                   (["ollama_narration"] if narration_settings else [])+
                    (["ollama_character_roles"] if character_roles else [])),
         "feeling_signals":signal_settings,
         "visual_mood":visual_mood_settings,
@@ -274,6 +282,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         "scenes":scene_settings,
         "story":story_settings,
         "naming":naming_settings,
+        "narration":narration_settings,
         "timing_seconds":timing,
         "perception":{"speech_enabled":transcribe,
                       "speech_model":whisper_model if transcribe else None,
@@ -307,5 +316,6 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         **({"feeling_curve":feeling_curve} if feeling_curve is not None else {}),
         **({"scenes":scene_list} if scene_list is not None else {}),
         **({"story":story} if story_settings else {}),
+        **({"narration":narration_list} if narration_list is not None else {}),
         **({"characters":character_result["characters"],
             "character_tracks":character_result["character_tracks"]} if character_result else {})}
