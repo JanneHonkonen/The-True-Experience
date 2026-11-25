@@ -68,6 +68,10 @@ def load_demucs(model=DEFAULT_MODEL):
     if getattr(net, "samplerate", RATE) != RATE:
         raise RuntimeError(f"{model} expects {net.samplerate} Hz audio")
     vocal = net.sources.index("vocals")
+    if device == "cpu":
+        print("WARNING: PyTorch does not see a GPU, so separation runs on the CPU (slow). "
+              "For an RTX 50-series card install a CUDA build: python -m pip install --force-reinstall "
+              "torch --index-url https://download.pytorch.org/whl/cu128", file=sys.stderr)
 
     def separate(stereo):
         wav = torch.from_numpy(np.ascontiguousarray(stereo, dtype=np.float32))

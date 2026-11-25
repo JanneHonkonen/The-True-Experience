@@ -47,6 +47,8 @@ def main(argv=None):
                         "journalist ...), e.g. qwen3.5:9b; implies --characters")
     p.add_argument("--character-fps",type=float,default=1.0,
                    help="Frames per second sampled for character tracking (0.1-5)")
+    p.add_argument("--speaker-model",default="microsoft/wavlm-base-plus-sv",
+                   help="Hugging Face speaker-embedding model for voice groups; 'none' uses rough MFCC fingerprints")
     p.add_argument("--separate-audio",action=argparse.BooleanOptionalAction,default=None,
                    help="Split dialogue from music with Demucs (GPU if available) before speech, voice "
                         "and music analysis. On by default with --voice; --no-separate-audio turns it off")
@@ -66,6 +68,7 @@ def main(argv=None):
                          character_fps=a.character_fps,
                          separate_audio=a.voice if a.separate_audio is None else a.separate_audio,
                          separation_model=a.separation_model,
+                         voice_speaker_model=None if a.speaker_model.lower()=="none" else a.speaker_model,
                          voice_emotion_model=None if a.voice_emotion_model.lower()=="none" else a.voice_emotion_model)
         path = Path(a.output)
         path.parent.mkdir(parents=True,exist_ok=True)

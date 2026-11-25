@@ -132,7 +132,8 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             visual_mood_model=None,visual_mood_frames=6,
             voice=False,voice_emotion_model="superb/wav2vec2-base-superb-er",
             characters=False,character_roles_model=None,character_fps=1.0,
-            separate_audio=False,separation_model="htdemucs"):
+            separate_audio=False,separation_model="htdemucs",
+            voice_speaker_model="microsoft/wavlm-base-plus-sv"):
     path=Path(video_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Video file not found: {path}")
@@ -185,7 +186,8 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
     voice_settings=None
     if voice and speech:
         from .voice import analyze_voice
-        voice_settings=analyze_voice(vocals,speech,emotion_model=voice_emotion_model or None)
+        voice_settings=analyze_voice(vocals,speech,emotion_model=voice_emotion_model or None,
+                                     speaker_model=voice_speaker_model or None)
         lap("voice")
     visuals=caption_shots(path,shots,model_name=caption_model,max_frames=max_caption_frames,sample_spacing=caption_spacing) if caption_frames else []
     if caption_frames: lap("frame_captions")
