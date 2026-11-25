@@ -110,6 +110,17 @@ class LinkingTests(unittest.TestCase):
         self.assertEqual(speech[2]["character_source"], "only_face_on_screen")
         self.assertGreater(chars[a_id]["dialogue_seconds"], 4)
         self.assertTrue(chars[a_id]["likely_main_character"])
+        self.assertFalse(chars[a_id]["background"])
+
+    def test_brief_one_shot_figures_are_background(self):
+        from true_experience.characters import mark_background
+        chars = [{"id": f"C{n}", "shots": [n], "screen_seconds": 1.0, "dialogue_seconds": 0.0,
+                  "prominence_rank": n} for n in range(1, 6)]
+        chars[4]["dialogue_seconds"] = 1.5
+        timeline = [{"characters_present": [{"id": "C4"}, {"id": "C1"}]}]
+        mark_background(chars, timeline)
+        self.assertEqual([c["background"] for c in chars], [False, False, False, True, False])
+        self.assertEqual([p["background"] for p in timeline[0]["characters_present"]], [True, False])
 
 
 class RoleTests(unittest.TestCase):

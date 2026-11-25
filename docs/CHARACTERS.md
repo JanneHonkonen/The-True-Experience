@@ -47,6 +47,9 @@ the local vision model what kind of character each one is, and implies
 6. **Prominence.** Screen time (50%), dialogue time (30%) and on-screen size
    (20%), relative to the most prominent character.
    `likely_main_character` is true for rank 1 and anyone within 80% of it.
+7. **Background.** A figure seen in one shot only, for at most 2 s, with no
+   lines and not in the top 3 is marked `background: true` (crowds, extras,
+   quick cutaways). They keep their IDs so they can still be followed.
 
 ## Role interpretation (`--character-roles`)
 

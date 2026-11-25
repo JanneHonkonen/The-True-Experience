@@ -658,6 +658,17 @@ def rank_prominence(characters):
         c["likely_main_character"] = n == 1 or c["prominence"] >= 0.8
 
 
+def mark_background(characters, timeline, fps=SAMPLE_FPS):
+    """Brief one-shot figures without lines (crowds, extras, quick cutaways)."""
+    for c in characters:
+        c["background"] = (len(c["shots"]) == 1 and c["screen_seconds"] <= 2.0 / fps
+                           and not c.get("dialogue_seconds") and c.get("prominence_rank", 1) > 3)
+    background = {c["id"] for c in characters if c["background"]}
+    for window in timeline:
+        for p in window.get("characters_present") or []:
+            p["background"] = p["id"] in background
+
+
 def analyze_characters(video, info, shots, timeline, speech, *, fps=SAMPLE_FPS,
                        backend=None, frame_loader=None, min_screen_seconds=None):
     """Find, follow and link people. Adds to timeline and speech in place."""
@@ -684,12 +695,15 @@ def analyze_characters(video, info, shots, timeline, speech, *, fps=SAMPLE_FPS,
     attach_to_timeline(timeline, rows, fps)
     link_speech(speech, rows, characters)
     rank_prominence(characters)
+    mark_background(characters, timeline, fps)
     for r in rows:
         r.pop("times")
     print(f"Characters: {count} frames, {len(tracks)} appearances, {len(characters)} characters "
           f"({len(face_groups)} faces, {len(outfit_groups)} outfits)", file=sys.stderr)
     return {"characters": characters, "character_tracks": rows,
             "settings": {"sample_fps": fps, "frames": count, "appearances": len(tracks),
+                         "characters": len(characters),
+                         "background_characters": sum(c["background"] for c in characters),
                          "face_groups": len(face_groups), "outfit_groups": len(outfit_groups),
                          "face_threshold": FACE_THRESHOLD, "outfit_threshold": OUTFIT_THRESHOLD,
                          "models": {k: Path(v[0]).name for k, v in MODELS.items()},
