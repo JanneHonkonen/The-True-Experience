@@ -131,7 +131,8 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             max_caption_frames=120,caption_spacing=10.0,feeling_signals=False,
             visual_mood_model=None,visual_mood_frames=6,
             voice=False,voice_emotion_model="superb/wav2vec2-base-superb-er",
-            characters=False,character_roles_model=None,character_fps=1.0):
+            characters=False,character_roles_model=None,character_fps=1.0,
+            separate_audio=False,separation_model="htdemucs"):
     path=Path(video_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Video file not found: {path}")
@@ -172,12 +173,19 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
     lap("probe_cuts_silence")
     if transcribe and not info["has_audio"]:
         raise ValueError("Cannot transcribe: no audio stream in video")
-    speech=transcribe_audio(path,duration,model_name=whisper_model,language=language) if transcribe else []
+    separation=None
+    if separate_audio and info["has_audio"]:
+        from .separation import separate_audio as run_separation
+        separation=run_separation(path,model=separation_model)
+        lap("separation")
+    vocals=separation["vocals_path"] if separation else path
+    music=separation["music_path"] if separation else None
+    speech=transcribe_audio(vocals,duration,model_name=whisper_model,language=language) if transcribe else []
     if transcribe: lap("speech")
     voice_settings=None
     if voice and speech:
         from .voice import analyze_voice
-        voice_settings=analyze_voice(path,speech,emotion_model=voice_emotion_model or None)
+        voice_settings=analyze_voice(vocals,speech,emotion_model=voice_emotion_model or None)
         lap("voice")
     visuals=caption_shots(path,shots,model_name=caption_model,max_frames=max_caption_frames,sample_spacing=caption_spacing) if caption_frames else []
     if caption_frames: lap("frame_captions")
@@ -194,7 +202,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
     signal_settings=None
     if feeling_signals:
         from .signals import compute_signals
-        signal_settings=compute_signals(path,info,shots,timeline)
+        signal_settings=compute_signals(path,info,shots,timeline,music_path=music)
         lap("feeling_signals")
     visual_mood_settings=None
     if feeling_signals and visual_mood_model:
@@ -227,11 +235,13 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                    (["cpu_feeling_signals"] if feeling_signals else [])+
                    (["ollama_visual_mood"] if visual_mood_settings else [])+
                    (["voice_prosody_and_emotion"] if voice_settings else [])+
+                   (["demucs_separation"] if separation else [])+
                    (["character_tracking"] if character_result else [])+
                    (["ollama_character_roles"] if character_roles else [])),
         "feeling_signals":signal_settings,
         "visual_mood":visual_mood_settings,
         "voice":voice_settings,
+        "separation":separation["settings"] if separation else None,
         "characters":character_result["settings"] if character_result else None,
         "character_roles":character_roles,
         "timing_seconds":timing,

@@ -316,7 +316,7 @@ def stream_frame_windows(video, bounds, width, height, fps=FRAME_FPS, frame_widt
         proc.wait()
 
 
-def compute_signals(video, info, shots, timeline):
+def compute_signals(video, info, shots, timeline, music_path=None):
     """Add ``feeling_signals`` to every timeline window, in place."""
     video = Path(video)
     bounds = [(w["start_seconds"], w["end_seconds"]) for w in timeline]
@@ -324,7 +324,9 @@ def compute_signals(video, info, shots, timeline):
     np = _np()
     audio_iter = stream_audio_windows(video, bounds) if info.get("has_audio") else None
     frame_iter = stream_frame_windows(video, bounds, info.get("width"), info.get("height"))
+    music_iter = stream_audio_windows(music_path, bounds) if music_path else None
     history = np.zeros(0, dtype=np.float32)
+    music_history = np.zeros(0, dtype=np.float32)
     for window, (start, end) in zip(timeline, bounds):
         frames, times = next(frame_iter, ([], []))
         audio = None
@@ -332,13 +334,20 @@ def compute_signals(video, info, shots, timeline):
             samples = next(audio_iter, np.zeros(0, dtype=np.float32))
             audio = summarize_audio(samples, AUDIO_RATE, history, start)
             history = np.concatenate([history, samples])[-AUDIO_RATE:]
+        music = None
+        if music_iter is not None:
+            samples = next(music_iter, np.zeros(0, dtype=np.float32))
+            music = summarize_audio(samples, AUDIO_RATE, music_history, start)
+            music_history = np.concatenate([music_history, samples])[-AUDIO_RATE:]
         window["feeling_signals"] = {
             "pacing": summarize_pacing(start, end, shots),
             "look": summarize_look(frames, times, cut_times),
-            "audio": audio}
-    for it in (audio_iter, frame_iter):
+            "audio": audio,
+            **({"music": music} if music_iter is not None else {})}
+    for it in (audio_iter, frame_iter, music_iter):
         if it is not None:
             it.close()
     return {"audio_rate": AUDIO_RATE if info.get("has_audio") else None,
             "frame_fps": FRAME_FPS, "frame_width": _even(FRAME_WIDTH),
-            "audio_source": "full_mix" if info.get("has_audio") else None}
+            "audio_source": "full_mix" if info.get("has_audio") else None,
+            "music_source": "separated_music_stem" if music_path else None}

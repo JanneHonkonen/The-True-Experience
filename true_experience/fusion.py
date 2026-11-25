@@ -136,8 +136,8 @@ def read_visual(mood):
                     mood_words=mood.get("mood_words", []))
 
 
-def read_music(audio):
-    """Major/minor colour and rhythmic drive from the full mix (weak until separation)."""
+def read_music(audio, separated=False):
+    """Major/minor colour and rhythmic drive; trusted more from a separated music stem."""
     if not audio:
         return None
     mode, mode_conf = audio.get("mode"), audio.get("mode_confidence") or 0.0
@@ -151,12 +151,16 @@ def read_music(audio):
         drive = _clip(0.5 * drive + 0.5 * (tempo - 100.0) / 60.0)
     if valence is None and tempo is None:
         return None
-    # Key and tempo come from the full mix (dialogue and effects included) and
-    # flip easily between windows, so music counts for little until separation.
-    confidence = 0.35 * max(mode_conf, (audio.get("tempo_confidence") or 0.0))
+    # On the full mix, dialogue and effects make key and tempo flip between
+    # windows, so music counts for little there. The separated stem is cleaner.
+    factor = 0.7 if separated else 0.35
+    if separated and (audio.get("rms_dbfs") is not None and audio["rms_dbfs"] < -45):
+        return None  # no music playing
+    confidence = factor * max(mode_conf, (audio.get("tempo_confidence") or 0.0))
     return _reading(valence, drive, confidence,
                     [k for k, v in (("mode", valence), ("tempo_bpm", tempo)) if v is not None] +
-                    ["onset_rate_per_second"], mode=mode if valence is not None else None)
+                    ["onset_rate_per_second"], mode=mode if valence is not None else None,
+                    source="music_stem" if separated else "full_mix")
 
 
 def read_sound(audio, silence_state, base=None):
@@ -241,7 +245,8 @@ def fuse_timeline(timeline):
             "visual": read_visual(signals.get("visual_mood")),
             "voice": read_voice(window.get("speech"), window["start_seconds"],
                                 window["end_seconds"], voice_base),
-            "music": read_music(signals.get("audio")),
+            "music": (read_music(signals["music"], separated=True) if signals.get("music") is not None
+                      else read_music(signals.get("audio"))),
             "sound": read_sound(signals.get("audio"), silence_state, loud_base),
         }.items() if v is not None}
         v_now, v_weight = _weighted(readings, "valence")

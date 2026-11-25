@@ -21,6 +21,7 @@ class SetupDocsTests(unittest.TestCase):
             "pillow>=10",
             "numpy>=1.24",
             "opencv-python-headless>=4.8",
+            "demucs>=4.1",
         ])
         self.assertFalse(any(x.startswith(("-e ", "--editable ")) for x in packages))
 

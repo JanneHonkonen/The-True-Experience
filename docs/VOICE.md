@@ -37,8 +37,10 @@ Options:
   and sad. Check the licence of any replacement.
 
 Known limits:
-- Audio is the full mix; music and explosions disturb pitch and emotion until
-  source separation (Demucs) lands.
+- With `--voice`, analysis runs on the Demucs vocals stem (see
+  [SEPARATION.md](SEPARATION.md)). With `--no-separate-audio` it falls back to
+  the full mix, where music and explosions disturb pitch and emotion: on a
+  trailer, one speaker's pitch read anywhere from 110 to 400 Hz.
 - Voice groups are a rough fingerprint (MFCC statistics plus pitch), not true
   speaker recognition. Good for clearly different voices, unreliable for
   similar ones. A proper speaker-embedding model can replace it later.

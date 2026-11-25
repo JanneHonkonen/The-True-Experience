@@ -19,7 +19,7 @@ the film before it tries to follow the story. The full design is in
 | Visual mood from frame sequences (Qwen3.5 9B through Ollama) | working | GPU, about 7-8 GB |
 | Voice: pitch, rate, loudness, voice groups, voice emotion | working, needs tuning on real dialogue | CPU + small GPU model |
 | Fusion into one emotional timeline (valence, arousal, tension, label, conflicts, irony, turning points) | working, first version | CPU |
-| Separating music, voice and effects (Demucs) | planned | GPU |
+| Separating dialogue from music (Demucs), feeding speech, voice and music | working, first version | GPU, about 1-2 GB |
 | Music mood and sound events (CLAP, PANNs) | planned | GPU |
 | Characters: face identity, clothing or suit identity, one ID per character, voice link | working, first version | CPU |
 | Character roles: main character, hero, villain, journalist, business person ... | working, first version | GPU (same vision model) |
@@ -68,7 +68,8 @@ ollama pull qwen3.5:9b
 ```
 
 The first run also downloads the Whisper and voice-emotion weights, and
-`--characters` downloads about 180 MB of OpenCV models once.
+`--characters` downloads about 180 MB of OpenCV models once, and separation
+downloads the Demucs weights (about 80 MB) once.
 
 ## Run the feeling timeline
 
@@ -84,7 +85,8 @@ Lighter variants:
 |---|---|---|
 | `--feeling-signals` | pacing, look and sound signals fused into a timeline | none |
 | `--visual-mood-model qwen3.5:9b` | adds visual mood per interval (implies `--feeling-signals`) | about 7-8 GB |
-| `--voice` | adds transcript, prosody, voice groups and voice emotion (implies `--transcribe` and `--feeling-signals`) | about 3 GB, then freed |
+| `--voice` | adds transcript, prosody, voice groups and voice emotion (implies `--transcribe`, `--feeling-signals` and `--separate-audio`) | about 3 GB, then freed |
+| `--separate-audio` | splits dialogue from music with Demucs first, so speech, voice and music are measured on clean stems (`--no-separate-audio` turns it off) | about 1-2 GB, then freed |
 | `--voice-emotion-model none` | keeps prosody and voice groups, skips the emotion model | |
 | `--characters` | finds people, follows them by face and by clothing, and gives each character one ID | none |
 | `--character-roles qwen3.5:9b` | adds each character's role and apparent occupation (implies `--characters`) | the vision model again |
@@ -116,7 +118,7 @@ timing line per stage, and the same numbers are saved in
 
 Stage guides: [feeling signals](docs/FEELING_SIGNALS.md),
 [visual mood](docs/VISUAL_MOOD.md), [voice](docs/VOICE.md),
-[characters](docs/CHARACTERS.md).
+[characters](docs/CHARACTERS.md), [separation](docs/SEPARATION.md).
 
 ## Other tools in the repository
 

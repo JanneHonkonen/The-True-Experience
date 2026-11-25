@@ -47,6 +47,10 @@ def main(argv=None):
                         "journalist ...), e.g. qwen3.5:9b; implies --characters")
     p.add_argument("--character-fps",type=float,default=1.0,
                    help="Frames per second sampled for character tracking (0.1-5)")
+    p.add_argument("--separate-audio",action=argparse.BooleanOptionalAction,default=None,
+                   help="Split dialogue from music with Demucs (GPU if available) before speech, voice "
+                        "and music analysis. On by default with --voice; --no-separate-audio turns it off")
+    p.add_argument("--separation-model",default="htdemucs",help="Demucs model name")
     a = p.parse_args(argv)
     try:
         result = analyze(a.video,interval=a.interval,scene_threshold=a.scene_threshold,
@@ -60,6 +64,8 @@ def main(argv=None):
                          voice=a.voice,
                          characters=a.characters,character_roles_model=a.character_roles,
                          character_fps=a.character_fps,
+                         separate_audio=a.voice if a.separate_audio is None else a.separate_audio,
+                         separation_model=a.separation_model,
                          voice_emotion_model=None if a.voice_emotion_model.lower()=="none" else a.voice_emotion_model)
         path = Path(a.output)
         path.parent.mkdir(parents=True,exist_ok=True)

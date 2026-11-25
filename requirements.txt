@@ -5,7 +5,8 @@
 # No '-e' / extras expression is needed. The stdlib + FFmpeg-only pipeline
 # works without installing any of these packages.
 # A first model run will download Whisper weights; --characters downloads
-# about 180 MB of OpenCV zoo models once (to ~/.cache/true_experience/models).
+# about 180 MB of OpenCV zoo models once (to ~/.cache/true_experience/models),
+# and audio separation downloads the Demucs htdemucs weights (about 80 MB) once.
 #
 # CPU-only Linux users may install the CPU PyTorch wheel first:
 #     python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -19,3 +20,4 @@ torch>=2.2
 pillow>=10
 numpy>=1.24
 opencv-python-headless>=4.8
+demucs>=4.1

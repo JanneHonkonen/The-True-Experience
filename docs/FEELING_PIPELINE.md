@@ -162,6 +162,7 @@ Process changes over the earlier version:
    Stage 7 visual mood with Qwen3.5 9B. *(done, #20)*
    Stage 4 voice: prosody, voice groups, voice emotion. *(see docs/VOICE.md)*
    Characters: face and clothing identity, character IDs, roles. *(see docs/CHARACTERS.md)*
+   Stage 3 separation: Demucs vocals and music stems feed speech, voice and music. *(see docs/SEPARATION.md)*
 4. GPU backends one at a time, each optional with a fake backend in tests:
    Demucs, voice emotion, CLAP music mood, PANNs sound events, Qwen3-VL visual mood.
 5. Stage 9: interpretation and whole-film emotional arc.
