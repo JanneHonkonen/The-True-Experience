@@ -73,6 +73,10 @@ def main(argv=None):
     p.add_argument("--story",metavar="MODEL",
                    help="Local Ollama vision model that reads each scene and the whole story arc, "
                         "e.g. qwen3.5:9b; implies --scenes")
+    p.add_argument("--listen",action="store_true",
+                   help="Listen to the music (style, instruments, mood) and sound effects (explosions, engines, "
+                        "crowds ...) with CLAP (GPU if available, about 600 MB once); implies --feeling-signals")
+    p.add_argument("--listen-model",default="laion/clap-htsat-unfused",help="Hugging Face CLAP model")
     p.add_argument("--narration",action=argparse.BooleanOptionalAction,default=True,
                    help="With --story, write timed passages per scene that describe what is seen, heard and "
                         "felt, quoting the real lines (on by default; --no-narration skips it)")
@@ -93,7 +97,8 @@ def main(argv=None):
                          whisper_model=a.whisper_model,language=a.language,
                          caption_frames=a.caption_frames,caption_model=a.caption_model,
                          max_caption_frames=a.max_caption_frames,caption_spacing=a.caption_spacing,
-                         feeling_signals=a.feeling_signals or bool(a.visual_mood_model) or a.voice,
+                         feeling_signals=a.feeling_signals or bool(a.visual_mood_model) or a.voice or a.listen,
+                         listen=a.listen,listen_model=a.listen_model,
                          visual_mood_model=a.visual_mood_model,visual_mood_frames=a.visual_mood_frames,
                          voice=a.voice,
                          characters=a.characters,character_roles_model=a.character_roles,

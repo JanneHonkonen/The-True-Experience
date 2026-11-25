@@ -136,8 +136,26 @@ def read_visual(mood):
                     mood_words=mood.get("mood_words", []))
 
 
-def read_music(audio, separated=False):
-    """Major/minor colour and rhythmic drive; trusted more from a separated music stem."""
+def read_music(audio, separated=False, listening=None):
+    """Major/minor colour and rhythmic drive; trusted more from a separated music stem.
+
+    When the listening stage heard the music (CLAP), its mood (heroic, ominous,
+    sad ...) leads and the measured mode and tempo only colour it.
+    """
+    heard = (listening or {}).get("music") or {}
+    if heard and not heard.get("present"):
+        return None  # the listening model hears no music here
+    if heard.get("mood_valence") is not None:
+        base = read_music(audio, separated) if audio else None
+        mv, ma = heard["mood_valence"], heard["mood_arousal"]
+        if base:
+            mv = 0.75 * mv + 0.25 * (base["valence"] if base["valence"] is not None else mv)
+            ma = 0.75 * ma + 0.25 * (base["arousal"] if base["arousal"] is not None else ma)
+        moods = [m["label"] for m in heard.get("mood") or []]
+        return _reading(mv, ma, 0.4 + 0.5 * (heard.get("mood_confidence") or 0.0),
+                        ["listening_mood"] + (base["basis"] if base else []),
+                        mode=(base or {}).get("mode"), moods=moods,
+                        source="music_stem" if separated else "full_mix")
     if not audio:
         return None
     mode, mode_conf = audio.get("mode"), audio.get("mode_confidence") or 0.0
@@ -245,8 +263,9 @@ def fuse_timeline(timeline):
             "visual": read_visual(signals.get("visual_mood")),
             "voice": read_voice(window.get("speech"), window["start_seconds"],
                                 window["end_seconds"], voice_base),
-            "music": (read_music(signals["music"], separated=True) if signals.get("music") is not None
-                      else read_music(signals.get("audio"))),
+            "music": (read_music(signals["music"], separated=True, listening=signals.get("listening"))
+                      if signals.get("music") is not None
+                      else read_music(signals.get("audio"), listening=signals.get("listening"))),
             "sound": read_sound(signals.get("audio"), silence_state, loud_base),
         }.items() if v is not None}
         v_now, v_weight = _weighted(readings, "valence")
@@ -269,6 +288,7 @@ def fuse_timeline(timeline):
         tension = _clip(0.5 * max(arousal, 0.0) + 0.25 * max(-valence, 0.0)
                         + 0.15 * (look.get("darkness") or 0.0)
                         + (0.1 if music.get("mode") == "minor" else 0.0)
+                        + (0.1 if set(music.get("moods") or []) & {"tense", "ominous"} else 0.0)
                         + (0.2 if hush_after_loud else 0.0), 0.0, 1.0)
         previous_peak = audio.get("peak_short_term_dbfs")
         conflicts, irony = find_conflicts(readings)

@@ -162,11 +162,29 @@ def _known(value):
     return isinstance(value, str) and value.strip() and value.strip().lower() not in ("unclear", "unknown", "none")
 
 
+_NONE = {"none", "none visible", "n/a", "no", "clean-shaven", "clean shaven", "unclear", "unknown", ""}
+
+
+def _clothing(appearance):
+    """'Dark-haired man with a goatee, wearing formal suits' -> 'wears formal suits'."""
+    look = appearance.strip().rstrip(".")
+    m = re.search(r"\b(?:wearing|dressed in)\s+(.*)", look, flags=re.I) or \
+        re.match(r"^(?:an?\s+|the\s+)?(?:[\w-]+\s+){0,2}?(?:man|woman|boy|girl|person|figure)\s+in\s+(.*)",
+                 look, flags=re.I)
+    text = "wears " + m.group(1) if m else look[:1].lower() + look[1:]
+    # Keep the clothing: stop at an action or a repeat of the hair ("..., holding a camera").
+    return re.split(r",\s|\s(?:and|while)\s+\w+ing\b", text, maxsplit=1)[0].strip()
+
+
 def profile(character):
-    """One sentence a reader can follow: name, apparent look, role."""
+    """One sentence a reader can follow: name, apparent look, clothing, role."""
     role = character.get("role") or {}
     body = role.get("physical") or {}
     gender = body.get("apparent_gender") if _known(body.get("apparent_gender")) else None
+    appearance = role.get("appearance") if _known(role.get("appearance")) else ""
+    if not gender and appearance:
+        m = re.search(r"\b(man|woman|boy|girl)\b", " ".join(appearance.lower().split()[:4]))
+        gender = m.group(1) if m else None
     age = body.get("apparent_age_range") if _known(body.get("apparent_age_range")) else None
     noun = gender or "person"
     name = (character.get("name") or {}).get("name")
@@ -174,21 +192,29 @@ def profile(character):
     also = (character.get("name") or {}).get("also_called") or []
     if also:
         head += " (" + ", ".join(f'"{a}"' for a in also[:2]) + ")"
-    parts = []
+    look = []
     if age:
-        if age in ("child", "teen"):
-            parts.append(f"appears to be a {age}")
-        elif age == "70+":
-            parts.append("appears to be over 70")
-        else:
-            parts.append(f"appears to be in {_PRONOUN.get(gender, 'their')} {age}")
-    for key in ("build", "hair", "facial_hair"):
-        if _known(body.get(key)):
-            parts.append(body[key].strip())
-    parts += [f.strip() for f in body.get("distinctive_features") or [] if _known(f)][:2]
-    if _known(role.get("appearance")):
-        look = role["appearance"].strip().rstrip(".")
-        parts.append(look[0].lower() + look[1:])
+        look.append(f"appears to be a {age}" if age in ("child", "teen") else
+                    "appears to be over 70" if age == "70+" else
+                    f"appears to be in {_PRONOUN.get(gender, 'their')} {age}")
+    build = (body.get("build") or "").strip()
+    if build.lower() not in _NONE:
+        look.append(build if "build" in build.lower() else f"{build} build")
+    hair = (body.get("hair") or "").strip()
+    if hair.lower() not in _NONE:
+        look.append(hair if "hair" in hair.lower() or "bald" in hair.lower() else
+                    f"hair {hair}" if "," in hair else f"{hair} hair")
+    beard = (body.get("facial_hair") or "").strip()
+    if beard.lower() not in _NONE and gender not in ("woman", "girl"):
+        look.append(beard)
+    clothing = _clothing(appearance) if appearance else ""
+    for f in body.get("distinctive_features") or []:
+        f = f.strip()
+        if f.lower() not in _NONE and f.lower()[:4] not in clothing.lower() and len(look) < 7:
+            look.append(f)
+    parts = list(look)
+    if clothing:
+        parts.append(clothing)
     kind = role.get("narrative_role")
     tags = [a.replace("_", " ") for a in role.get("archetypes") or [] if a != "unclear"]
     if _known(kind) or tags:

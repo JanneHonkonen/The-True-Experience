@@ -134,7 +134,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
             characters=False,character_roles_model=None,character_fps=1.0,
             separate_audio=False,separation_model="htdemucs",
             voice_speaker_model="microsoft/wavlm-base-plus-sv",
-            scenes=False,story_model=None,narration=True):
+            scenes=False,story_model=None,narration=True,listen=False,listen_model=None):
     path=Path(video_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"Video file not found: {path}")
@@ -207,6 +207,12 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         from .signals import compute_signals
         signal_settings=compute_signals(path,info,shots,timeline,music_path=music)
         lap("feeling_signals")
+    music_moments=None; listening_settings=None
+    if feeling_signals and listen and info.get("has_audio"):
+        from .listening import DEFAULT_MODEL as CLAP_MODEL,listen as listen_to
+        music_moments,listening_settings=listen_to(Path(music) if music else path,timeline,
+                                                   model=listen_model or CLAP_MODEL)
+        lap("listening")
     visual_mood_settings=None
     if feeling_signals and visual_mood_model:
         from .visual_mood import analyze_visual_mood
@@ -251,7 +257,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         from .narration import narrate
         narration_list,narration_settings=narrate(
             path,scene_list,speech,character_result["characters"] if character_result else [],
-            timeline,story,model=story_model)
+            timeline,story,model=story_model,moments=music_moments)
         lap("narration")
     timing["total"]=round(time.perf_counter()-started,2)
     timing["seconds_per_video_minute"]=round(timing["total"]/(duration/60),2)
@@ -272,6 +278,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                    (["scene_grouping"] if scene_list is not None else [])+
                    (["ollama_story_reading"] if story_settings else [])+
                    (["ollama_narration"] if narration_settings else [])+
+                   (["clap_listening"] if listening_settings else [])+
                    (["ollama_character_roles"] if character_roles else [])),
         "feeling_signals":signal_settings,
         "visual_mood":visual_mood_settings,
@@ -282,6 +289,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         "scenes":scene_settings,
         "story":story_settings,
         "naming":naming_settings,
+        "listening":listening_settings,
         "narration":narration_settings,
         "timing_seconds":timing,
         "perception":{"speech_enabled":transcribe,
@@ -293,13 +301,17 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
                       "visual_sampling": ({"target_spacing_seconds":caption_spacing,
                           **describe_coverage(shots,visuals)} if caption_frames else None)},
         "limitations":["Shot cuts are not semantic scenes.",
-                       "Audio activity does not identify speech, sound effects or music.",
+                       "Audio activity does not identify speech, sound effects or music"
+                       +(" (the listening stage labels them by zero-shot matching, which can be wrong)."
+                         if listening_settings else "."),
                        "Subtitles are externally supplied, not verified transcription.",
                        "Model transcripts and captions may be wrong or hallucinated.",
                        "Captured frames are samples, not descriptions of whole scenes.",
                        "Speaker identities, emotion, and narrative function are not inferred."]+
                       (["Feeling signals are measurements (light, motion, loudness, tempo, key), not emotions.",
-                        "Music features are computed on the full audio mix, not a separated music track.",
+                        ("Music features come from the separated music stem, which also holds sound effects."
+                         if separation else
+                         "Music features are computed on the full audio mix, not a separated music track."),
                         "Fused feeling (valence, arousal, tension, emotion label) is a heuristic estimate "
                         "from measured signals, not yet validated against human ratings."]
                        if feeling_signals else [])+
@@ -314,6 +326,7 @@ def analyze(video_path,*,interval=5.,scene_threshold=.3,silence_db=-35.,
         "silence_intervals":[{"start_seconds":a,"end_seconds":b} for a,b in silences],
         "speech_segments":speech,"visual_observations":visuals,"timeline":timeline,
         **({"feeling_curve":feeling_curve} if feeling_curve is not None else {}),
+        **({"music_moments":music_moments} if music_moments is not None else {}),
         **({"scenes":scene_list} if scene_list is not None else {}),
         **({"story":story} if story_settings else {}),
         **({"narration":narration_list} if narration_list is not None else {}),
