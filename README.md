@@ -7,6 +7,11 @@ produces a timestamped JSON timeline that a language model can reason over.
 
 ## Where the project is now
 
+**Version 0.4.0b1 (beta), Test Stage 1.** The output now describes a film's
+feeling well enough that another AI, given only this output and no video,
+rebuilt the trailer's emotional arc, its central turn and its symbolism. See
+[actual-tests/test-stage-1.md](actual-tests/test-stage-1.md).
+
 Development is **feeling first**: the system builds an emotional timeline of
 the film before it tries to follow the story. The full design is in
 [docs/FEELING_PIPELINE.md](docs/FEELING_PIPELINE.md).
@@ -26,10 +31,12 @@ the film before it tries to follow the story. The full design is in
 | Scenes: shots grouped by look, people, dialogue and silence | working, first version | CPU |
 | Story: scene readings, story beats, whole-film arc and turning points | working, first version | GPU (same vision model) |
 | Character names from dialogue and on-screen text, one-line profile per character | working, first version | CPU (uses the scene readings) |
+| Timed narration per scene and a compact experience file | working, first version | GPU (same vision model) |
 | "Talk about the film" interpretation | later | |
 
-Measured on an RTX 5080 (12 GB) with a 2:29 trailer: about 105 s in total,
-peak VRAM 8.7 GB, roughly 40-45 s of processing per minute of video. Only one
+Measured on an RTX 5080 (12 GB) with a 2:29 trailer and every stage on:
+about 240 s in total, or about 96 s per minute of video, with peak VRAM about
+8.7 GB. Speed work is planned after the usability stages. Only one
 model is on the GPU at a time and each is unloaded after its stage.
 
 All readings are model and signal **estimates**, not facts about the film.

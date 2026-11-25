@@ -65,6 +65,8 @@ Style:
   shorten by leaving words out with "...", never reword inside quotes.
 - Call people by the given name or description. Never write IDs such as C1, S2 or SC3.
   When a speaker is unknown, describe them from the frames ("a blonde reporter").
+- Describe only what can be seen or heard. No smells, temperatures or touch ("the scent of
+  smoke", "radiating heat"): the film cannot carry them.
 - Do not invent plot, places or names that the frames and facts do not support. Never name
   actors or real people. Describe music by its feel, not by guessing a band or song.
 - A title card, rating card or logo is said simply ("The green rating card: this is a trailer").
